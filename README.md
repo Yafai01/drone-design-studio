@@ -4,7 +4,7 @@ Design and check multirotor and fixed-wing drones with a trained scikit-learn mo
 
 Designed and developed by **Yafai**.
 
-**Live app:** _added after the first deployment_
+**Live app:** <https://drone-design-studio-ten.vercel.app>
 
 ## What it does
 
@@ -43,7 +43,7 @@ Locally, saved builds are written to `saved_builds.json`. On the hosted site the
 
 ## Deploy
 
-The repo is set up for Vercel: `api/index.py` serves the API as a Python function, and `vercel.json` routes `/api/*` to it and `/` to the page.
+The repo is set up for Vercel: `api/index.py` runs the same server as a Python function that serves both the page and the API. Pushing to `main` deploys automatically; to deploy by hand:
 
 ```bash
 vercel deploy --prod

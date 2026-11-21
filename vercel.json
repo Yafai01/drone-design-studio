@@ -4,9 +4,5 @@
       "maxDuration": 60,
       "includeFiles": "{drone_design.py,drone_app.py,drone_design_model.joblib,drone_web/index.html}"
     }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" },
-    { "source": "/", "destination": "/drone_web/index.html" }
-  ]
+  }
 }
