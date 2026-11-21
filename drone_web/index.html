@@ -1,0 +1,1887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drone Design Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=B612:wght@400;700&family=IBM+Plex+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: requirements column on the left of a desk; the result is an engineering drawing sheet
+   (plan view, notes, title block) with performance and bill-of-materials tables beneath it. */
+:root{
+  --desk:#d8dde1; --sheet:#f8f9f7; --ink:#15191e; --ink2:#5a636e; --line:#c2c9cf; --rule:#e2e6e9;
+  --acc:#e2550e; --acc-ink:#ffffff; --acc-soft:rgba(226,85,14,.10);
+  --ok:#1d7849; --ok-soft:rgba(29,120,73,.11); --warn:#a26100; --warn-soft:rgba(162,97,0,.12);
+  --bad:#c0302a; --bad-soft:rgba(192,48,42,.10);
+  --s-phys:#2b5fb3; --s-ml:#e2550e;
+  --shadow:0 1px 0 rgba(21,25,30,.05),0 18px 36px -18px rgba(21,25,30,.35);
+  --f-disp:"Archivo","Bahnschrift","Arial Narrow",sans-serif;
+  --f-ui:"B612","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono","Cascadia Mono",Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --desk:#07111a; --sheet:#0d2030; --ink:#dbe7f0; --ink2:#86a1b6; --line:#294660; --rule:#163049;
+  --acc:#ff7b39; --acc-ink:#1b0c03; --acc-soft:rgba(255,123,57,.14);
+  --ok:#52c48d; --ok-soft:rgba(82,196,141,.13); --warn:#f0b54a; --warn-soft:rgba(240,181,74,.13);
+  --bad:#ff6e62; --bad-soft:rgba(255,110,98,.13);
+  --s-phys:#4f8de8; --s-ml:#e8631f;
+  --shadow:0 1px 0 rgba(0,0,0,.3),0 18px 40px -16px rgba(0,0,0,.6);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --desk:#07111a; --sheet:#0d2030; --ink:#dbe7f0; --ink2:#86a1b6; --line:#294660; --rule:#163049;
+  --acc:#ff7b39; --acc-ink:#1b0c03; --acc-soft:rgba(255,123,57,.14);
+  --ok:#52c48d; --ok-soft:rgba(82,196,141,.13); --warn:#f0b54a; --warn-soft:rgba(240,181,74,.13);
+  --bad:#ff6e62; --bad-soft:rgba(255,110,98,.13);
+  --s-phys:#4f8de8; --s-ml:#e8631f;
+  --shadow:0 1px 0 rgba(0,0,0,.3),0 18px 40px -16px rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--desk);color:var(--ink);font:13.5px/1.5 var(--f-ui);-webkit-font-smoothing:antialiased;min-height:100vh}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* top bar */
+.top{border-bottom:1px solid var(--line);background:var(--desk)}
+.top-in{max-width:1480px;margin:0 auto;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.name{font:750 19px/1 var(--f-disp);font-stretch:125%;letter-spacing:-.01em;display:flex;align-items:center;gap:10px;margin:0}
+.name svg{color:var(--acc)}
+.meta{font:11px var(--f-mono);color:var(--ink2);letter-spacing:.02em}
+.meta b{color:var(--ok);font-weight:400}
+.sp{flex:1}
+
+/* toggles */
+.tog{display:flex;border:1px solid var(--ink);background:var(--sheet)}
+.tog button{flex:1;border:0;background:none;cursor:pointer;padding:9px 10px;display:flex;align-items:center;justify-content:center;gap:8px;
+  font:600 12.5px var(--f-ui);color:var(--ink2);white-space:nowrap}
+.tog button+button{border-left:1px solid var(--ink)}
+.tog button:hover{color:var(--ink)}
+.tog button[aria-pressed="true"]{background:var(--ink);color:var(--sheet)}
+.tog.sm button{padding:6px 10px;font-size:12px}
+.tog svg{flex:none}
+
+/* desk layout */
+.desk{max-width:1480px;margin:0 auto;padding-block:24px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;grid-template-columns:minmax(280px,330px) minmax(0,1fr);gap:32px;align-items:start}
+.desk>*{min-width:0}
+@media (max-width:1000px){.desk{grid-template-columns:minmax(0,1fr);gap:24px}}
+
+/* requirements column */
+.spec{position:sticky;top:20px;display:grid;gap:22px}
+@media (max-width:1000px){.spec{position:static}}
+.cap{font:700 10.5px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.cap::after{content:"";flex:1;height:1px;background:var(--line)}
+form{display:grid;gap:16px}
+.fld{display:grid;gap:4px}
+.ftop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ftop label,.ftop .lab{font-weight:700;font-size:13px}
+.nbox{display:flex;align-items:baseline;gap:5px;border-bottom:1.5px solid var(--ink);padding:2px 0 1px;width:112px;flex:none}
+.nbox input{border:0;background:none;outline:0;width:100%;min-width:0;text-align:right;font:700 15px var(--f-mono);font-variant-numeric:tabular-nums;padding:0}
+.nbox i{font:normal 11px var(--f-mono);color:var(--ink2);min-width:26px}
+.nbox:focus-within{border-color:var(--acc)}
+.fbot{display:flex;justify-content:space-between;align-items:center;font:10.5px var(--f-mono);color:var(--ink2)}
+.nl{display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:var(--ink);font-family:var(--f-ui);font-size:11.5px}
+.nl input{accent-color:var(--acc);margin:0}
+.fld.off .nbox,.fld.off input[type=range]{opacity:.35;pointer-events:none}
+.ferr{display:none;font-size:12px;color:var(--bad)}
+.fld.err .ferr{display:block}
+.fld.err .nbox{border-color:var(--bad)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;margin:0;cursor:pointer;background:
+  linear-gradient(var(--acc),var(--acc)) 0 11px/var(--p,50%) 2px no-repeat,
+  linear-gradient(var(--line),var(--line)) 0 11.5px/100% 1px no-repeat,
+  repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 10%) 0 100%/calc(100% + 1px) 5px no-repeat,
+  repeating-linear-gradient(90deg,var(--ink2) 0 1px,transparent 1px 50%) 0 100%/calc(100% + 1px) 8px no-repeat}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:20px;border:1px solid var(--ink);border-radius:0;
+  background:linear-gradient(var(--acc),var(--acc)) center/1px 100% no-repeat,var(--sheet)}
+input[type=range]::-moz-range-thumb{width:9px;height:18px;border:1px solid var(--ink);border-radius:0;background:linear-gradient(var(--acc),var(--acc)) center/1px 100% no-repeat,var(--sheet)}
+input[type=range]:focus-visible{outline-offset:4px}
+details.adv summary{cursor:pointer;font:700 10.5px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);list-style:none;display:flex;gap:8px;align-items:center}
+details.adv summary::-webkit-details-marker{display:none}
+details.adv summary::before{content:"+";font-size:14px;width:10px}
+details.adv[open] summary::before{content:"−"}
+details.adv[open] summary{margin-bottom:14px}
+details.adv>.fld+.fld{margin-top:16px}
+.run{height:48px;border:0;background:var(--acc);color:var(--acc-ink);cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;font:750 14px var(--f-disp);font-stretch:118%;letter-spacing:.06em;text-transform:uppercase}
+.run:hover{filter:brightness(1.06)}
+.run:disabled{cursor:progress;filter:saturate(.6)}
+.hint{margin:-6px 0 0;font-size:12px;color:var(--ink2);text-wrap:pretty}
+
+/* plotting status */
+.status{display:none;align-items:center;gap:12px;font:11px var(--f-mono);letter-spacing:.06em;color:var(--ink2);margin:0 0 10px;text-transform:uppercase}
+.status .trk{flex:1;height:2px;background:var(--line);position:relative;overflow:hidden;max-width:240px}
+.status .trk::after{content:"";position:absolute;inset:0 auto 0 0;width:35%;background:var(--acc);animation:slide 1.1s ease-in-out infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(290%)}}
+.work.busy .status{display:flex}
+.work.busy #work{opacity:.45;pointer-events:none;transition:opacity .2s}
+
+/* sheet tabs */
+.tabs{display:flex;align-items:flex-end;gap:4px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);border-bottom:0;background:transparent;cursor:pointer;padding:8px 14px 7px;text-align:left;display:grid;gap:1px;color:var(--ink2)}
+.tabs button:hover{color:var(--ink);border-color:var(--ink2)}
+.tabs button[aria-selected="true"]{background:var(--sheet);border-color:var(--ink);color:var(--ink);position:relative;top:1px;padding-bottom:8px}
+.tabs .tn{font:700 10.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase}
+.tabs .ts{font:12.5px var(--f-mono);font-variant-numeric:tabular-nums}
+.tabs .tnote{margin-left:auto;font-size:12px;color:var(--ink2);padding-bottom:6px}
+@media (max-width:640px){.tabs .tnote{display:none}.tabs button{padding:7px 10px}}
+
+/* drawing sheet */
+.sheet{background:var(--sheet);border:1px solid var(--ink);box-shadow:var(--shadow);padding:18px;position:relative}
+.z{position:absolute;display:flex;justify-content:space-around;font:9.5px var(--f-mono);color:var(--ink2);pointer-events:none}
+.z.t,.z.b{left:18px;right:18px;height:18px;align-items:center}
+.z.t{top:0}.z.b{bottom:0}
+.z.l,.z.r{top:18px;bottom:18px;width:18px;flex-direction:column;align-items:center}
+.z.l{left:0}.z.r{right:0}
+.inner{border:1.5px solid var(--ink);display:grid}
+.draw{position:relative;padding:8px 8px 0}
+.draw svg{display:block;width:100%;height:auto;max-height:560px;margin:0 auto}
+.foot{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,380px);border-top:1.5px solid var(--ink)}
+@media (max-width:760px){.foot{grid-template-columns:minmax(0,1fr)}.tb{border-left:0!important;border-top:1.5px solid var(--ink)}}
+.notes{padding:10px 14px 12px;font-size:12px}
+.notes h4{margin:0 0 4px;font:700 10.5px var(--f-mono);letter-spacing:.14em;text-transform:uppercase}
+.notes ol{margin:0;padding-left:20px;display:grid;gap:2px;color:var(--ink)}
+.notes li::marker{font-family:var(--f-mono);color:var(--ink2)}
+.tb{border-left:1.5px solid var(--ink);display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.tb>div{padding:5px 9px 6px;border-top:1px solid var(--ink);border-left:1px solid var(--ink);min-width:0}
+.tb>div:nth-child(-n+1){border-top:0}
+.tb .w3{grid-column:1/-1;border-left:0}
+.tb>div:nth-child(3n+3){border-left:0}
+.tb .k{display:block;font:9px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
+.tb .v{display:block;font:700 12.5px var(--f-mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tb .maker{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.tb .maker b{font:780 14px var(--f-disp);font-stretch:125%;letter-spacing:-.01em}
+.tb .maker span{font:9.5px var(--f-mono);color:var(--ink2);letter-spacing:.08em;text-transform:uppercase}
+.tb .ttl .v{font:700 13.5px var(--f-ui)}
+
+/* stamp */
+.stamp{position:absolute;right:22px;top:20px;transform:rotate(-4deg);border:2px solid currentColor;outline:1px solid currentColor;outline-offset:2px;
+  padding:5px 10px 6px;text-align:center;font:800 15px/1.1 var(--f-disp);font-stretch:125%;letter-spacing:.06em;text-transform:uppercase;opacity:.88;
+  background:color-mix(in srgb,var(--sheet) 80%,transparent)}
+.stamp small{display:block;font:10px var(--f-mono);letter-spacing:.1em;margin-top:3px}
+.stamp.ok{color:var(--ok)} .stamp.bad{color:var(--bad)}
+@media (max-width:640px){.stamp{position:static;transform:none;display:inline-block;margin:6px 0 0 4px;font-size:12px}}
+.nosol{padding:40px 24px 48px;display:grid;justify-items:start;gap:14px;max-width:640px}
+.nosol .stamp{position:static;transform:rotate(-3deg)}
+.nosol p{margin:0;font-size:14px}
+
+/* drawing ink */
+.dwg .ln{fill:none;stroke:var(--ink);stroke-width:1.3;stroke-linejoin:round}
+.dwg .f{fill:var(--sheet)}
+.dwg .thin{stroke-width:.8}
+.dwg .fin{stroke-width:1.3}
+.dwg .hid{fill:none;stroke:var(--ink2);stroke-width:1;stroke-dasharray:5 3}
+.dwg .ctr{fill:none;stroke:var(--ink2);stroke-width:.7;stroke-dasharray:16 3 2 3}
+.dwg .ph{fill:none;stroke:var(--ink2);stroke-width:.8;stroke-dasharray:12 3 2 3 2 3}
+.dwg .dim{fill:none;stroke:var(--acc);stroke-width:.9}
+.dwg .ahf{fill:var(--acc)}
+.dwg .dimt{fill:var(--acc);font:700 11px var(--f-mono);paint-order:stroke;stroke:var(--sheet);stroke-width:4px;stroke-linejoin:round}
+.dwg .lead{stroke:var(--ink);stroke-width:.7}
+.dwg .dot{fill:var(--ink)}
+.dwg .bal .bc{fill:var(--sheet);stroke:var(--ink);stroke-width:1}
+.dwg .bal text{fill:var(--ink);font:700 10.5px var(--f-mono)}
+.dwg .bal{cursor:pointer}
+.dwg .lbl{fill:var(--ink2);font:10px var(--f-mono);letter-spacing:.12em}
+.dwg .hi .ln,.dwg .hi.ln{stroke:var(--acc);stroke-width:2}
+.dwg .hi .hid,.dwg .hi .ph{stroke:var(--acc);stroke-width:1.6}
+.dwg .bal.hi .bc{fill:var(--acc);stroke:var(--acc)}
+.dwg .bal.hi text{fill:var(--acc-ink)}
+.dwg .bal.hi .lead{stroke:var(--acc)}
+.plot .ln{stroke-dasharray:1;stroke-dashoffset:1;animation:plot 1.2s cubic-bezier(.3,.1,.2,1) forwards}
+.plot .dimg,.plot .bal,.plot .hid,.plot .ph,.plot .ctr{animation:show .5s .8s backwards}
+@keyframes plot{to{stroke-dashoffset:0}}
+@keyframes show{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){.plot .ln{stroke-dasharray:none;animation:none}.plot .dimg,.plot .bal,.plot .hid,.plot .ph,.plot .ctr{animation:none}.status .trk::after{animation:none}}
+
+/* tables */
+.tables{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;margin-top:28px}
+.tables .wide{grid-column:1/-1}
+@media (max-width:1180px){.tables{grid-template-columns:minmax(0,1fr)}}
+.tsec h3{margin:0 0 6px;font:750 15px var(--f-disp);font-stretch:112%;letter-spacing:.01em;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.tsec h3 small{font:11px var(--f-mono);color:var(--ink2);font-stretch:100%}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{font:700 9.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);text-align:left;padding:6px 8px;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--ink);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--rule);vertical-align:middle}
+td.n,th.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.lim{font:11.5px var(--f-mono);color:var(--ink2);white-space:nowrap}
+td .u{color:var(--ink2);font-size:11px;margin-left:3px}
+tr[data-item]{cursor:default}
+tr.hi td{background:var(--acc-soft)}
+.bn{display:inline-grid;place-items:center;width:21px;height:21px;border:1px solid var(--ink);border-radius:50%;font:700 10.5px var(--f-mono)}
+tr.hi .bn{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+td .sub{display:block;color:var(--ink2);font-size:11.5px}
+.gauge{display:block;position:relative;width:84px;height:6px;background:var(--rule)}
+.gauge i{position:absolute;inset:0 auto 0 0;background:var(--ink2)}
+.gauge i.ok{background:var(--ok)} .gauge i.marg{background:var(--warn)} .gauge i.over{background:var(--bad)}
+.gauge b{position:absolute;top:-3px;bottom:-3px;width:1.5px;background:var(--ink)}
+.st{display:inline-block;font:700 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;white-space:nowrap}
+.st.ok{color:var(--ok);background:var(--ok-soft)} .st.marg{color:var(--warn);background:var(--warn-soft)} .st.over{color:var(--bad);background:var(--bad-soft)}
+.dev{display:block;position:relative;width:110px;height:10px}
+.dev::before{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--ink)}
+.dev::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--rule)}
+.dev i{position:absolute;top:2px;bottom:2px;background:var(--acc)}
+.foot-note{margin:18px 0 0;font-size:12px;color:var(--ink2)}
+
+/* sheet toolbar */
+.toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px}
+.toolbar .tlead{font:700 10.5px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);margin-right:auto}
+.tbtn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--ink);background:var(--sheet);color:var(--ink);cursor:pointer;padding:6px 11px;font:600 12px var(--f-ui);white-space:nowrap}
+.tbtn:hover{background:var(--ink);color:var(--sheet)}
+.tbtn.pri{background:var(--ink);color:var(--sheet)}
+.tbtn.pri:hover{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.tbtn svg{flex:none}
+
+/* trade study */
+.sweep{margin-top:30px}
+.h3{margin:0 0 6px;font:750 15px var(--f-disp);font-stretch:112%;letter-spacing:.01em;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.h3 small{font:11px var(--f-mono);color:var(--ink2);font-stretch:100%}
+.sweep-ctl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:end;justify-content:space-between;margin:8px 0 12px}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chips button{border:1px solid var(--line);background:none;padding:5px 9px;font:600 12px var(--f-ui);color:var(--ink2);cursor:pointer}
+.chips button:hover{border-color:var(--ink2);color:var(--ink)}
+.chips button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--sheet)}
+.rng{display:flex;align-items:end;gap:10px}
+.rng label{display:grid;gap:2px;font:9.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
+.rng input{width:92px;border:0;border-bottom:1.5px solid var(--ink);background:none;font:700 13px var(--f-mono);padding:2px 0;outline:0;text-align:right;color:var(--ink)}
+.rng input:focus{border-color:var(--acc)}
+.rng .unit{font:11px var(--f-mono);color:var(--ink2);padding-bottom:4px;min-width:24px}
+.summary{font-size:13.5px;margin:0 0 10px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.summary b{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.summary .err{color:var(--bad)}
+#sweepOut.loading{opacity:.5}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--ink2);margin-bottom:6px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sw{width:18px;height:2px;display:inline-block}
+.sw.band{height:11px;width:14px;background:var(--bad-soft);box-shadow:inset 0 0 0 1px var(--bad)}
+.sw.cur{height:12px;width:0;border-left:1px dashed var(--ink)}
+.chart{position:relative;background:var(--sheet);border:1px solid var(--line)}
+.chart svg{display:block;width:100%;height:auto}
+.chart svg:focus{outline:none}
+.chart svg:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+.chart .gl{stroke:var(--rule);stroke-width:1}
+.chart .base{stroke:var(--ink2);stroke-width:1}
+.chart .ax{fill:var(--ink2);font:10.5px var(--f-mono)}
+.chart .axt{fill:var(--ink);font:700 11.5px var(--f-ui)}
+.chart .band{fill:var(--bad-soft)}
+.chart .bandt{fill:var(--bad);font:700 9.5px var(--f-mono);letter-spacing:.1em}
+.chart .cur{stroke:var(--ink);stroke-width:1;stroke-dasharray:4 3}
+.chart .curt{fill:var(--ink);font:700 10.5px var(--f-mono);paint-order:stroke;stroke:var(--sheet);stroke-width:4px}
+.chart .lim{stroke:var(--ink2);stroke-width:1;stroke-dasharray:6 4}
+.chart .limt{fill:var(--ink2);font:10.5px var(--f-mono)}
+.chart .ring{fill:none;stroke:var(--sheet);stroke-width:6;stroke-linejoin:round}
+.chart .s-phys,.chart .s-ml{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .s-phys{stroke:var(--s-phys)} .chart .s-ml{stroke:var(--s-ml)}
+.chart .m-phys{fill:var(--s-phys);stroke:var(--sheet);stroke-width:2}
+.chart .m-ml{fill:var(--s-ml);stroke:var(--sheet);stroke-width:2}
+.chart .lab{fill:var(--ink);font:700 11.5px var(--f-ui)}
+.chart .xh{stroke:var(--ink);stroke-width:1;opacity:.55}
+.chart .hit{fill:transparent;cursor:crosshair}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--sheet);padding:8px 10px;font:12px var(--f-ui);min-width:190px;z-index:3;display:none;box-shadow:var(--shadow)}
+.tip .tt{font:700 11.5px var(--f-mono);margin-bottom:4px}
+.tip .r{display:flex;justify-content:space-between;gap:16px;font-variant-numeric:tabular-nums}
+.tip .r b{font-family:var(--f-mono)}
+.tip i{display:inline-block;width:12px;height:2px;margin-right:6px;vertical-align:middle}
+details.tablev{margin-top:10px}
+details.tablev summary{cursor:pointer;font:700 10.5px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
+details.tablev .scroll{max-height:320px;overflow:auto;margin-top:8px}
+
+/* saved builds */
+.saved{display:grid;gap:6px;grid-template-columns:minmax(0,1fr)}
+.spec>*{min-width:0}
+.saved .empty{font-size:12px;color:var(--ink2);margin:0}
+.sv{display:flex;border:1px solid var(--line);background:var(--sheet)}
+.sv .open{flex:1;min-width:0;text-align:left;border:0;background:none;padding:7px 10px;cursor:pointer;color:var(--ink)}
+.sv .open b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv .open small{font:11px var(--f-mono);color:var(--ink2)}
+.sv .open:hover b{color:var(--acc)}
+.sv .del{border:0;border-left:1px solid var(--line);background:none;cursor:pointer;padding:0 10px;color:var(--ink2);font:600 11px var(--f-ui)}
+.sv .del:hover{color:var(--bad)}
+.sv .del.armed{background:var(--bad);color:var(--sheet)}
+
+/* compare */
+.cmp-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.cmp-head h2{margin:0;font:750 21px var(--f-disp);font-stretch:118%;letter-spacing:-.01em}
+.cmp-head p{margin:2px 0 0;color:var(--ink2);font-size:12.5px}
+.cmpwrap{background:var(--sheet);border:1px solid var(--ink);box-shadow:var(--shadow);padding:6px 10px 12px}
+table.cmpt th.bh{text-transform:none;letter-spacing:0;font:700 12.5px var(--f-ui);color:var(--ink);white-space:normal;min-width:150px;vertical-align:bottom}
+table.cmpt th.bh small{display:block;font:10.5px var(--f-mono);color:var(--ink2);font-weight:400;margin:2px 0 6px}
+table.cmpt td.grp{font:700 9.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);padding-top:16px;border-bottom:1px solid var(--ink)}
+table.cmpt td.best{background:var(--ok-soft)}
+.bt{font:700 9px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ok);margin-left:6px}
+
+.toast{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--sheet);
+  padding:10px 14px;font-size:13px;z-index:20;transform:translateY(16px);opacity:0;transition:transform .2s,opacity .2s;pointer-events:none;max-width:min(420px,calc(100vw - 32px))}
+.toast.on{transform:none;opacity:1}
+
+/* engineering analysis */
+.anl{margin-top:30px}
+.anl-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;background:var(--sheet);border:1px solid var(--line);padding:16px 18px 18px}
+@media (max-width:1180px){.anl-grid{grid-template-columns:minmax(0,1fr)}}
+.sub{margin:0 0 2px;font:700 10.5px var(--f-mono);letter-spacing:.14em;text-transform:uppercase}
+.sublead{margin:0 0 12px;font-size:12.5px;color:var(--ink2);text-wrap:pretty}
+.sublead b{color:var(--ink)}
+.wb{display:grid;gap:2px}
+.wr{display:grid;grid-template-columns:150px minmax(0,1fr) 70px 42px;gap:10px;align-items:center;padding:4px 0;font-size:12.5px}
+.wr.tot{border-top:1px solid var(--ink);margin-top:4px;padding-top:7px;font-weight:700}
+.wbar{height:10px;background:var(--rule);position:relative}
+.wbar i{position:absolute;inset:0 auto 0 0;background:var(--s-phys);border-radius:0 2px 2px 0}
+.wk{text-align:right}.wp{text-align:right;color:var(--ink2)}
+@media (max-width:520px){.wr{grid-template-columns:110px minmax(0,1fr) 60px 36px;gap:6px}}
+.figs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px 18px;margin:18px 0 0;padding-top:14px;border-top:1px solid var(--rule)}
+.figs dt{font:9.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
+.figs dd{margin:0}
+.figs dd.mono{font-size:17px;font-weight:700;line-height:1.3}
+.figs dd.fn{font-size:11.5px;color:var(--ink2)}
+.sw.blk{height:10px;width:14px;background:var(--s-phys)}
+.tornado svg{display:block;width:100%;height:auto}
+.tornado .gl{stroke:var(--rule)} .tornado .zero{stroke:var(--ink);stroke-width:1.2}
+.tornado .ax{fill:var(--ink2);font:10px var(--f-mono)}
+.tornado .tl{fill:var(--ink);font:700 11.5px var(--f-ui)}
+.tornado .tv{fill:var(--ink2);font:9.5px var(--f-mono)}
+.tornado .b-hi{fill:var(--s-phys)} .tornado .b-lo{fill:var(--s-phys);opacity:.45}
+.tornado .bv{fill:var(--ink);font:10px var(--f-mono)}
+
+/* shortcuts dialog */
+.help{border:1px solid var(--ink);background:var(--sheet);color:var(--ink);padding:18px 20px;max-width:min(460px,calc(100vw - 32px));box-shadow:var(--shadow)}
+.help::backdrop{background:rgba(7,17,26,.45)}
+.help-h{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+.help h2{margin:0;font:750 17px var(--f-disp);font-stretch:118%}
+.help dl{margin:0;display:grid;gap:0}
+.help dl>div{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule);align-items:center}
+.help dd{margin:0;font-size:13px}
+.help dt span{color:var(--ink2);font:11px var(--f-mono)}
+.help p{font-size:12px;color:var(--ink2);margin:12px 0 0}
+kbd{display:inline-block;min-width:22px;text-align:center;padding:1px 6px;border:1px solid var(--ink);border-bottom-width:2px;font:700 11px var(--f-mono);background:var(--desk)}
+.kbtn{display:inline-flex;align-items:center;gap:6px}
+
+/* ---- refinement layer: sentence-case labels, softer controls (overrides earlier rules) ---- */
+:root{--r:6px}
+.spec{gap:24px}
+.cap{font:700 13px var(--f-ui);letter-spacing:0;text-transform:none;color:var(--ink)}
+details.adv summary{font:600 13px var(--f-ui);letter-spacing:0;text-transform:none;color:var(--ink)}
+.envsum{font:12px var(--f-ui);color:var(--ink2)}
+.fhelp{font-size:12px;line-height:1.4;color:var(--ink2);margin-top:-1px}
+.tog{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.tog button+button{border-left:1px solid var(--line)}
+.run{font:700 15px var(--f-ui);font-stretch:100%;letter-spacing:0;text-transform:none;border-radius:var(--r);height:46px}
+.tbtn{border-color:var(--line);border-radius:var(--r);padding:7px 12px}
+.tbtn:hover{background:var(--rule);color:var(--ink)}
+.tbtn.pri{background:var(--ink);border-color:var(--ink);color:var(--sheet)}
+.tbtn.pri:hover{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.tbtn.ghost{border-color:transparent;background:transparent;color:var(--ink2)}
+.tbtn.ghost:hover{background:var(--rule);color:var(--ink)}
+.chips button{border-radius:99px;padding:5px 12px}
+.status{font:13px var(--f-ui);letter-spacing:0;text-transform:none}
+th{font:600 12px var(--f-ui);letter-spacing:0;text-transform:none}
+.h3,.tsec h3{font:700 16px var(--f-ui);font-stretch:100%;letter-spacing:0}
+.h3 small,.tsec h3 small{font:12px var(--f-ui);color:var(--ink2)}
+.sub{font:700 14px var(--f-ui);letter-spacing:0;text-transform:none}
+.figs dt,.lc .lc-m .k{font:12px var(--f-ui);letter-spacing:0;text-transform:none}
+.rng label{font:12px var(--f-ui);letter-spacing:0;text-transform:none}
+details.tablev summary{font:600 13px var(--f-ui);letter-spacing:0;text-transform:none}
+.lib .tag{font:600 11.5px var(--f-ui);letter-spacing:0;text-transform:none;border:0;background:var(--acc-soft);border-radius:99px;padding:2px 9px}
+.lib .lc,.anl-grid,.chart,.cmpwrap,.sv{border-radius:var(--r)}
+.cmpwrap{border-color:var(--line)}
+.lib .lc h3{font:700 16px var(--f-ui);font-stretch:100%}
+.cmp-head h2{font:700 22px var(--f-ui);font-stretch:100%}
+.name{font-size:18px;font-stretch:118%}
+.by{font:12.5px var(--f-ui);letter-spacing:0}
+.meta{font:12px var(--f-ui);letter-spacing:0}
+.sheet{padding:10px;border-color:var(--line);border-radius:var(--r)}
+.inner{border-width:1px}
+
+/* result header, summary strip and section tabs */
+.res-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px 20px;margin:0 0 14px}
+.res-title{min-width:0;flex:1 1 340px}
+.res-title h2{margin:0;font:700 24px/1.2 var(--f-ui);letter-spacing:-.01em;text-wrap:balance}
+.res-title p{margin:4px 0 0;color:var(--ink2);font-size:13px;text-wrap:pretty}
+.ractions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.menu{position:relative}
+.menu summary{list-style:none;cursor:pointer}
+.menu summary::-webkit-details-marker{display:none}
+.menu summary::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg);margin-left:3px}
+.menu[open] summary{background:var(--rule)}
+.menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:10;min-width:240px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:4px;display:grid}
+.menu-pop button{display:flex;gap:10px;align-items:flex-start;text-align:left;border:0;background:none;padding:8px 10px;border-radius:4px;cursor:pointer;color:var(--ink);font:600 13px var(--f-ui)}
+.menu-pop button:hover,.menu-pop button:focus-visible{background:var(--rule)}
+.menu-pop svg{margin-top:2px;flex:none}
+.menu-pop small{display:block;font-weight:400;font-size:12px;color:var(--ink2)}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin:0 0 12px}
+.opts button{border:1px solid var(--line);background:var(--sheet);border-radius:var(--r);padding:10px 12px;text-align:left;cursor:pointer;display:grid;gap:2px;color:var(--ink)}
+.opts button:hover{border-color:var(--ink2)}
+.opts button[aria-selected="true"]{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.opts .on{font:700 13px var(--f-ui)}
+.opts .os{font:12px var(--f-mono);color:var(--ink2);font-variant-numeric:tabular-nums}
+.sumbar{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);background:var(--sheet);border:1px solid var(--line);border-radius:var(--r);margin:0 0 18px;overflow:hidden}
+@media (max-width:980px){.sumbar{grid-template-columns:minmax(0,1fr)}}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:560px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{padding:12px 16px;border-right:1px solid var(--rule)}
+.kpi:last-child{border-right:0}
+.kl{display:block;font-size:12px;color:var(--ink2)}
+.kv{display:block;font:700 22px/1.25 var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.kv small{font:400 12px var(--f-ui);color:var(--ink2)}
+.verdict{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-left:1px solid var(--line)}
+@media (max-width:980px){.verdict{border-left:0;border-top:1px solid var(--line)}}
+.verdict .vi{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center}
+.verdict b{display:block;font-size:14px}
+.verdict span{font-size:12.5px;color:var(--ink2);text-wrap:pretty}
+.verdict.ok .vi{background:var(--ok-soft);color:var(--ok)}
+.verdict.warn .vi{background:var(--warn-soft);color:var(--warn)}
+.verdict.bad .vi{background:var(--bad-soft);color:var(--bad)}
+.ptabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 18px;overflow-x:auto}
+.ptabs button{border:0;background:none;padding:10px 14px;font:600 13.5px var(--f-ui);color:var(--ink2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.ptabs button:hover{color:var(--ink)}
+.ptabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--acc)}
+.ppanel .tables,.ppanel .anl,.ppanel .sweep{margin-top:0}
+.ppanel .anl>.h3{display:none}
+
+/* credit */
+.by{font:12.5px var(--f-ui);color:var(--ink2);border-left:1px solid var(--line);padding-left:14px}
+.by b{color:var(--acc);font-weight:700}
+.credit{border-top:1px solid var(--line)}
+.credit-in{max-width:1480px;margin:0 auto;padding-block:16px 22px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 20px;font-size:12px;color:var(--ink2)}
+.credit-in b{color:var(--ink)}
+.credit-in .mono{font-size:11px}
+@media print{.credit{display:none}}
+
+/* pre-built designs library */
+.lib-tags{margin-bottom:14px}
+.lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.lc{background:var(--sheet);border:1px solid var(--line);padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;transition:border-color .15s}
+.lc:hover{border-color:var(--ink)}
+.lc-top{display:flex;justify-content:space-between;align-items:center;font:11px var(--f-mono);color:var(--ink2)}
+.tag{font:700 9.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--acc);border:1px solid currentColor;padding:1px 6px}
+.lc-draw{border:1px solid var(--rule);background:
+  linear-gradient(var(--rule) 1px,transparent 1px) 0 0/16px 16px,linear-gradient(90deg,var(--rule) 1px,transparent 1px) 0 0/16px 16px;margin:2px 0 4px}
+.lc-draw svg{display:block;width:100%;height:auto}
+.lc-draw .bal,.lc-draw .dimg,.lc-draw .lbl{display:none}
+.lc h3{margin:0;font:750 15px var(--f-disp);font-stretch:112%}
+.lc-d{margin:0;font-size:12.5px;color:var(--ink2);text-wrap:pretty}
+.lc-spec{margin:0;font:11px var(--f-mono);color:var(--ink)}
+.lc-mw{flex:1;display:flex;align-items:flex-end}
+.lc-m{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end;width:100%;border-top:1px solid var(--rule);padding-top:8px;margin-top:4px;font-size:12px}
+.lc-m .k{display:block;font:9px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
+.lc-m b{font-size:14px}
+.lc-m .err{grid-column:1/-1;color:var(--bad)}
+.lc-wait{display:block;color:var(--ink2);font:11px var(--f-mono)}
+.lc .tbtn{margin-top:6px}
+
+/* conditions block */
+details.env summary{flex-wrap:wrap}
+.envsum{font:11px var(--f-mono);letter-spacing:0;text-transform:none;color:var(--ink);margin-left:auto}
+
+/* report dialog */
+.rep{max-width:min(520px,calc(100vw - 32px))}
+.rep form{display:grid;gap:12px}
+.rep .help-h{margin:0}
+.rep-lead{margin:0;font-size:12.5px;color:var(--ink2)}
+.rep-lead b{color:var(--ink)}
+.rf{display:grid;gap:4px;font:700 12.5px var(--f-ui)}
+.rf span{font-weight:400;color:var(--ink2)}
+.rf input,.rf textarea{border:1px solid var(--line);background:var(--desk);padding:7px 9px;font:13px var(--f-ui);color:var(--ink);resize:vertical}
+.rf input:focus,.rf textarea:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:var(--acc)}
+.rf2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:480px){.rf2{grid-template-columns:1fr}}
+
+/* report pages (print only) */
+#report{display:none;color:var(--ink);font-size:11.5px}
+.rp{break-after:page}
+.rp:last-child{break-after:auto}
+.rp-h{display:flex;align-items:center;gap:10px;border-bottom:2px solid var(--ink);padding-bottom:6px;margin-bottom:14px}
+.rp-h h2{margin:0;font:750 18px var(--f-disp);font-stretch:118%;flex:1}
+.rp-n{font:700 12px var(--f-mono);border:1.5px solid var(--ink);padding:1px 7px}
+.rp-ref{font:10px var(--f-mono);color:var(--ink2)}
+.rp .sheet{box-shadow:none}
+.rp .draw svg{max-height:none}
+.rp .tables{margin-top:0;grid-template-columns:1fr;gap:18px}
+.rp .tsec{break-inside:avoid}
+.rp .anl-grid{grid-template-columns:1fr;border:0;padding:0}
+.rp .anl-grid>div{break-inside:avoid}
+.rp .chart{break-inside:avoid}
+.rp-sub{font:700 10.5px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;margin:20px 0 8px}
+.rp-p{margin:0 0 10px;font-size:12px;line-height:1.6;max-width:75ch}
+.rp-cover .rc-top{display:flex;justify-content:space-between;font:700 10px var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--ink);padding-bottom:6px}
+.rp-cover h1{font:800 34px/1.05 var(--f-disp);font-stretch:125%;letter-spacing:-.015em;margin:44px 0 6px;text-wrap:balance}
+.rc-sub{font-size:15px;color:var(--ink2);margin:0 0 22px}
+.rc-meta{display:grid;grid-template-columns:repeat(3,1fr);border-top:1.5px solid var(--ink);border-left:1px solid var(--ink)}
+.rc-meta>div{padding:6px 10px;border-right:1px solid var(--ink);border-bottom:1px solid var(--ink)}
+.rc-meta .k,.rc-kpis .k{display:block;font:9px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
+.rc-meta .v{font:700 12.5px var(--f-mono)}
+.rc-verdict{margin:24px 0 4px}
+.rc-verdict .stamp{position:static;display:inline-block;transform:rotate(-3deg)}
+.rc-sum{font-size:13px;line-height:1.6;max-width:70ch;margin:0}
+.rc-kpis{display:grid;grid-template-columns:repeat(3,1fr);border-top:1.5px solid var(--ink);margin-top:16px}
+.rc-kpis>div{padding:10px 12px 10px 0;border-bottom:1px solid var(--rule)}
+.rc-kpis .v{font-size:22px;font-weight:700}
+.rc-kpis small{font-size:12px;font-weight:400;color:var(--ink2)}
+.rc-toc{margin:0;padding-left:22px;font-size:13px;line-height:1.8}
+.rc-toc li::marker{font-family:var(--f-mono)}
+table.asm td{vertical-align:top}
+table.asm td:first-child{font-weight:700;width:26%}
+table.asm td:nth-child(2){width:22%;white-space:nowrap}
+
+@media print{
+  body.reporting .top,body.reporting .desk,body.reporting .toast,body.reporting dialog{display:none!important}
+  body.reporting #report{display:block}
+  body.printdraw .res-head,body.printdraw .opts,body.printdraw .sumbar,body.printdraw .ptabs,body.printdraw .ppanel{display:none!important}
+  body.printdraw #pp_drawing{display:block!important}
+  .anl-grid{border:0;padding:0}
+  .top,.spec,.toolbar,.tabs,.status,.foot-note,.sweep-ctl,details.tablev,.toast,.cmp-head .tbtn{display:none!important}
+  body{background:#fff}
+  .desk{display:block;padding:0;max-width:none}
+  .sheet,.cmpwrap{box-shadow:none;break-inside:avoid}
+  .tsec,.sweep{break-inside:avoid}
+  .plot .ln{animation:none;stroke-dasharray:none}
+  .plot .dimg,.plot .bal,.plot .hid,.plot .ph,.plot .ctr{animation:none}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <h1 class="name">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="5.5" cy="5.5" r="3.5" stroke-dasharray="3 1.5"/><circle cx="18.5" cy="5.5" r="3.5" stroke-dasharray="3 1.5"/><circle cx="5.5" cy="18.5" r="3.5" stroke-dasharray="3 1.5"/><circle cx="18.5" cy="18.5" r="3.5" stroke-dasharray="3 1.5"/><path d="M8 8l8 8M16 8l-8 8"/><rect x="9.5" y="9.5" width="5" height="5" fill="currentColor"/></svg>
+      Drone Design Studio
+    </h1>
+    <span class="by">Designed by <b>Yafai</b></span>
+    <span class="sp"></span>
+    <button type="button" class="tbtn ghost" id="helpBtn" title="Keyboard shortcuts (?)">Shortcuts</button>
+    <div class="tog sm" role="group" aria-label="Sheet theme" id="theme">
+      <button type="button" data-theme-set="light">Paper</button>
+      <button type="button" data-theme-set="dark">Blueprint</button>
+    </div>
+  </div>
+</header>
+
+<main class="desk">
+  <aside class="spec" id="aside"></aside>
+  <section class="work" id="workwrap" aria-live="polite">
+    <div class="status"><span id="statusText">Plotting</span><span class="trk"></span></div>
+    <div id="work"></div>
+  </section>
+</main>
+<footer class="credit"><div class="credit-in">
+  <span><b>Drone Design Studio</b> · Designed and developed by <b>Yafai</b></span>
+  <span class="meta" id="meta">Connecting to model…</span>
+</div></footer>
+<div id="report" aria-hidden="true"></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (v, d = 1) => v == null || !isFinite(v) ? '–' : Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const r1 = n => Math.round(n * 10) / 10;
+const P = (x, y) => `${r1(x)},${r1(y)}`;
+
+/* ---------------- inputs ---------------- */
+const FORMS = {
+  'multirotor:design': [
+    {key:'payload_kg', label:'Payload', unit:'kg', min:0, max:25, step:0.1, value:0.5, smax:10, d:1},
+    {key:'min_flight_min', label:'Minimum flight time', unit:'min', min:1, max:180, step:1, value:20, smax:90, d:0},
+    {key:'max_size', label:'Max wheelbase', unit:'mm', min:100, max:3000, step:10, value:650, smin:150, smax:2000, d:0, nullable:'No limit'},
+    {key:'goal', type:'seg', label:'Optimise for', value:'flight_time', options:[['flight_time','Longest flight'],['light','Lightest build']]},
+    {adv:true, key:'n_motors', type:'seg', label:'Number of motors', value:'4', options:[['','Any'],['4','4'],['6','6'],['8','8']]},
+    {adv:true, key:'max_cells', label:'Max battery cells', unit:'S', min:2, max:14, step:1, value:6, d:0, nullable:'Any', nullDefault:true},
+  ],
+  'fixedwing:design': [
+    {key:'payload_kg', label:'Payload', unit:'kg', min:0, max:10, step:0.1, value:1.0, d:1},
+    {key:'min_flight_min', label:'Minimum flight time', unit:'min', min:1, max:600, step:1, value:60, smax:240, d:0},
+    {key:'max_size', label:'Max wingspan', unit:'m', min:0.6, max:4.5, step:0.05, value:2.5, d:2, nullable:'No limit'},
+    {key:'goal', type:'seg', label:'Optimise for', value:'light', options:[['flight_time','Longest flight'],['light','Lightest build']]},
+    {adv:true, key:'max_cells', label:'Max battery cells', unit:'S', min:2, max:14, step:1, value:6, d:0, nullable:'Any', nullDefault:true},
+  ],
+  'multirotor:check': [
+    {key:'n_motors', type:'seg', label:'Number of motors', value:'4', options:[['4','4'],['6','6'],['8','8']]},
+    {key:'D_in', label:'Prop diameter', unit:'in', min:2, max:30, step:0.1, value:10, d:1},
+    {key:'P_in', label:'Prop pitch', unit:'in', min:1, max:30, step:0.1, value:4.5, smax:15, d:1},
+    {key:'kv', label:'Motor KV', unit:'KV', min:50, max:5000, step:10, value:920, smax:3000, d:0},
+    {key:'cells', label:'Battery cells', unit:'S', min:1, max:14, step:1, value:3, d:0},
+    {key:'mah', label:'Battery capacity', unit:'mAh', min:100, max:50000, step:50, value:5000, smax:30000, d:0},
+    {key:'payload_kg', label:'Payload', unit:'kg', min:0, max:25, step:0.1, value:0, smax:10, d:1},
+  ],
+  'fixedwing:check': [
+    {key:'span_m', label:'Wingspan', unit:'m', min:0.3, max:6, step:0.05, value:2.0, d:2},
+    {key:'aspect', label:'Aspect ratio', unit:'', min:3, max:20, step:0.1, value:10, d:1},
+    {key:'D_in', label:'Prop diameter', unit:'in', min:2, max:30, step:0.1, value:12, smax:22, d:1},
+    {key:'P_in', label:'Prop pitch', unit:'in', min:1, max:30, step:0.1, value:6, smax:15, d:1},
+    {key:'kv', label:'Motor KV', unit:'KV', min:50, max:5000, step:10, value:800, smax:3000, d:0},
+    {key:'cells', label:'Battery cells', unit:'S', min:1, max:14, step:1, value:4, d:0},
+    {key:'mah', label:'Battery capacity', unit:'mAh', min:100, max:50000, step:50, value:5000, smax:30000, d:0},
+    {key:'payload_kg', label:'Payload', unit:'kg', min:0, max:10, step:0.1, value:0.5, d:1},
+  ],
+};
+
+const ENV_FIELDS = [
+  {key:'alt_m', label:'Altitude', unit:'m', min:-500, max:6000, step:50, value:0, smin:0, smax:4000, d:0},
+  {key:'temp_c', label:'Air temperature', unit:'°C', min:-40, max:50, step:1, value:15, smin:-20, smax:45, d:0, nullable:'Standard day', nullDefault:true},
+  {key:'reserve_pct', label:'Land with battery left', unit:'%', min:0, max:60, step:5, value:20, d:0},
+];
+const ENV_KEYS = new Set(ENV_FIELDS.map(f => f.key));
+const S = {kind:'multirotor', mode:'design', values:{}, busy:false, result:null, advOpen:false, envOpen:false,
+  env:{alt_m:0, temp_c:null, reserve_pct:20}, anl:null, anlP:null, swP:null, info:null,
+  view:null, saved:[], cur:null, sweep:{param:'mah', key:null, lo:0, hi:0, data:null, seq:0}};
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem('dds2') || '{}'); } catch (e) {}
+if (saved.kind) S.kind = saved.kind;
+if (saved.mode) S.mode = saved.mode;
+S.advOpen = !!saved.advOpen;
+S.envOpen = !!saved.envOpen;
+if (saved.env && typeof saved.env === 'object') Object.assign(S.env, saved.env);
+for (const part of location.hash.slice(1).split(',')) {
+  if (part === 'multirotor' || part === 'fixedwing') S.kind = part;
+  if (part === 'design' || part === 'check') S.mode = part;
+}
+const formKey = () => `${S.kind}:${S.mode}`;
+function vals() {
+  const k = formKey();
+  if (!S.values[k]) {
+    S.values[k] = {};
+    for (const f of FORMS[k]) S.values[k][f.key] = f.nullDefault ? null : f.value;
+    if (saved.values && saved.values[k]) Object.assign(S.values[k], saved.values[k]);
+  }
+  return S.values[k];
+}
+function persist() {
+  try { localStorage.setItem('dds2', JSON.stringify({kind:S.kind, mode:S.mode, values:S.values, advOpen:S.advOpen, envOpen:S.envOpen, env:S.env})); } catch (e) {}
+}
+const fieldDef = key => ENV_KEYS.has(key) ? ENV_FIELDS.find(f => f.key === key) : FORMS[formKey()].find(f => f.key === key);
+const bucket = key => ENV_KEYS.has(key) ? S.env : vals();
+function envSummary(env = S.env) {
+  return `${fmt(env.alt_m, 0)} m · ${env.temp_c == null ? 'standard day' : fmt(env.temp_c, 0) + ' °C'} · land at ${fmt(env.reserve_pct, 0)}%`;
+}
+function condText(c) {
+  return `${fmt(c.alt_m, 0)} m, ${fmt(c.temp_c, 0)} °C${c.standard_day ? ' (standard day)' : ''}, air density ${fmt(c.rho, 3)} kg/m³ (${fmt(c.density_ratio * 100, 0)}% of sea level)`;
+}
+
+const GLYPH = {
+  multirotor:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="5.5" cy="5.5" r="3.5"/><circle cx="18.5" cy="5.5" r="3.5"/><circle cx="5.5" cy="18.5" r="3.5"/><circle cx="18.5" cy="18.5" r="3.5"/><path d="M8 8l8 8M16 8l-8 8"/></svg>',
+  fixedwing:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5v19M1.5 10.5l10.5-1.5 10.5 1.5v2l-10.5-.5-10.5.5zM8 20l4-.8 4 .8"/></svg>',
+};
+
+function setPct(r) { r.style.setProperty('--p', clamp((r.value - r.min) / (r.max - r.min) * 100, 0, 100) + '%'); }
+
+function renderAside() {
+  const v = vals(), design = S.mode === 'design';
+  let main = '', adv = '';
+  for (const f of FORMS[formKey()]) {
+    const h = f.type === 'seg' ? segField(f, v[f.key]) : numField(f, v[f.key]);
+    if (f.adv) adv += h; else main += h;
+  }
+  $('#aside').innerHTML = `
+    <div><p class="cap">Aircraft</p>
+      <div class="tog" role="group" aria-label="Aircraft type">
+        ${['multirotor', 'fixedwing'].map(k => `<button type="button" data-kind="${k}" aria-pressed="${S.kind === k}">${GLYPH[k]}${k === 'multirotor' ? 'Multirotor' : 'Fixed-wing'}</button>`).join('')}
+      </div></div>
+    <div><p class="cap">Task</p>
+      <div class="tog" role="group" aria-label="Task">
+        <button type="button" data-mode="design" aria-pressed="${design}">Design new</button>
+        <button type="button" data-mode="check" aria-pressed="${!design}">Check a build</button>
+      </div></div>
+    <form id="form" novalidate>
+      <p class="cap" style="margin:0">${design ? 'Requirements' : 'Parts'}</p>
+      ${main}
+      ${adv ? `<details class="adv" id="adv"${S.advOpen ? ' open' : ''}><summary>More constraints</summary>${adv}</details>` : ''}
+      <details class="adv env" id="envbox"${S.envOpen ? ' open' : ''}><summary>Conditions <span class="envsum" id="envsum">${envSummary()}</span></summary>
+        ${ENV_FIELDS.map(f => numField(f, S.env[f.key])).join('')}
+        <p class="hint" style="margin:10px 0 0">Applies to the physics simulation. The ML model has no altitude or temperature input.</p></details>
+      <button class="run" type="submit" id="run"><span id="runlbl">${design ? 'Generate designs' : 'Analyse build'}</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+      <p class="hint">${design
+        ? 'Screens 80,000 random builds with the ML model, then checks the best 40 with a physics simulation.'
+        : 'Runs your parts through the ML model and the physics simulation side by side.'}</p>
+    </form>
+    <div class="saved"><p class="cap" style="margin:0 0 2px">Pre-built designs</p>
+      <button type="button" class="tbtn" data-act="library">Browse ${PRESETS.length} example builds</button></div>
+    <div class="saved" id="savedBox"></div>`;
+  $$('#aside input[type=range]').forEach(setPct);
+  renderSaved();
+  const d = $('#adv');
+  if (d) d.addEventListener('toggle', () => { S.advOpen = d.open; persist(); });
+  const eb = $('#envbox');
+  eb.addEventListener('toggle', () => { S.envOpen = eb.open; persist(); });
+}
+function segField(f, cur) {
+  return `<div class="fld" data-key="${f.key}"><div class="ftop"><span class="lab" id="l_${f.key}">${f.label}</span></div>
+    <div class="tog sm" role="group" aria-labelledby="l_${f.key}">${f.options.map(([val, lab]) =>
+      `<button type="button" data-seg="${f.key}" data-v="${val}" aria-pressed="${String(cur) === val}">${lab}</button>`).join('')}</div></div>`;
+}
+const HELP = {
+  payload_kg: 'Camera, sensors or cargo carried.',
+  P_in: 'How far the prop would move forward in one turn.',
+  kv: 'Motor speed per volt. Bigger props need lower KV.',
+  cells: 'LiPo cells in series, 3.7 V each.',
+  aspect: 'Span² ÷ wing area. Higher is more efficient.',
+  alt_m: 'Height above sea level where you fly.',
+  reserve_pct: 'Battery left when you land. 20% is a common safe margin.',
+};
+const helpFor = f => f.key === 'max_size' ? (S.kind === 'multirotor' ? 'Diagonal distance between motor shafts.' : 'Wing tip to wing tip.') : HELP[f.key];
+function numField(f, cur) {
+  const off = cur === null, shown = Number(off ? f.value : cur).toFixed(f.d), help = helpFor(f);
+  const smin = f.smin ?? f.min, smax = f.smax ?? f.max;
+  return `<div class="fld${off ? ' off' : ''}" data-key="${f.key}">
+    <div class="ftop"><label for="n_${f.key}">${f.label}</label>
+      <span class="nbox"><input id="n_${f.key}" data-num="${f.key}" inputmode="decimal" autocomplete="off" value="${shown}"${help ? ` aria-describedby="h_${f.key}"` : ''}><i>${f.unit}</i></span></div>
+    ${help ? `<div class="fhelp" id="h_${f.key}">${help}</div>` : ''}
+    <input type="range" id="r_${f.key}" data-range="${f.key}" min="${smin}" max="${smax}" step="${f.step}" value="${shown}" aria-label="${f.label}" tabindex="-1">
+    <div class="fbot"><span>${fmt(smin, f.d)}</span>${f.nullable ? `<label class="nl"><input type="checkbox" id="x_${f.key}" data-null="${f.key}"${off ? ' checked' : ''}>${f.nullable}</label>` : ''}<span>${fmt(smax, f.d)}${f.unit ? ' ' + f.unit : ''}</span></div>
+    <div class="ferr">Enter a value from ${fmt(f.min, f.d)} to ${fmt(f.max, f.d)}${f.unit ? ' ' + f.unit : ''}.</div></div>`;
+}
+
+const aside = $('#aside');
+aside.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.range) {
+    const k = t.dataset.range, f = fieldDef(k);
+    bucket(k)[k] = Number(t.value); setPct(t);
+    $(`#n_${k}`).value = Number(t.value).toFixed(f.d);
+    t.closest('.fld').classList.remove('err');
+  } else if (t.dataset.num) {
+    const k = t.dataset.num, num = Number(t.value.replace(',', '.'));
+    bucket(k)[k] = t.value.trim() === '' ? NaN : num;
+    const r = $(`#r_${k}`);
+    if (isFinite(num)) { r.value = num; setPct(r); }
+    t.closest('.fld').classList.remove('err');
+  }
+  if ($('#envsum')) $('#envsum').textContent = envSummary();
+  persist();
+});
+aside.addEventListener('change', e => {
+  const t = e.target;
+  if (!t.dataset.null) return;
+  const k = t.dataset.null, f = fieldDef(k), fld = t.closest('.fld');
+  bucket(k)[k] = t.checked ? null : (isFinite(Number($(`#n_${k}`).value)) ? Number($(`#n_${k}`).value) : f.value);
+  fld.classList.toggle('off', t.checked); fld.classList.remove('err');
+  if ($('#envsum')) $('#envsum').textContent = envSummary();
+  persist();
+});
+aside.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.open) return openSaved(b.dataset.open);
+  if (b.dataset.del) return deleteSaved(b);
+  if (b.dataset.act === 'compare' || b.dataset.act === 'library') {
+    S.view = b.dataset.act; renderWork(); $('#workwrap').scrollIntoView({block:'start', behavior:'smooth'}); return;
+  }
+  if (b.dataset.seg) {
+    vals()[b.dataset.seg] = b.dataset.v;
+    $$('button', b.parentElement).forEach(x => x.setAttribute('aria-pressed', x === b));
+    persist();
+  } else if ((b.dataset.kind || b.dataset.mode) && !S.busy) {
+    if (b.dataset.kind) S.kind = b.dataset.kind; else S.mode = b.dataset.mode;
+    persist(); renderAside(); run();
+  }
+});
+aside.addEventListener('submit', e => { e.preventDefault(); run(); });
+
+/* ---------------- running the model ---------------- */
+async function run() {
+  if (S.busy) return;
+  const v = vals(), body = {kind: S.kind};
+  let bad = false;
+  for (const f of FORMS[formKey()]) {
+    const x = v[f.key];
+    if (f.type === 'seg') { body[f.key] = x === '' ? null : (isNaN(Number(x)) ? x : Number(x)); continue; }
+    if (x === null) { body[f.key] = null; continue; }
+    if (!isFinite(x) || x < f.min || x > f.max) {
+      const fld = $(`.fld[data-key="${f.key}"]`); fld.classList.add('err'); bad = true;
+      const det = fld.closest('details'); if (det) det.open = true;
+      continue;
+    }
+    body[f.key] = x;
+  }
+  body.env = {};
+  for (const f of ENV_FIELDS) {
+    const x = S.env[f.key];
+    if (x === null && f.nullable) { body.env[f.key] = null; continue; }
+    if (!isFinite(x) || x < f.min || x > f.max) {
+      $(`.fld[data-key="${f.key}"]`).classList.add('err'); $('#envbox').open = true; bad = true; continue;
+    }
+    body.env[f.key] = x;
+  }
+  if (bad) return;
+  const mode = S.mode, kind = S.kind;
+  S.view = null;
+  setBusy(true);
+  let data;
+  try {
+    const r = await fetch(`/api/${mode}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    data = await r.json();
+  } catch (err) {
+    data = {ok:false, offline:true, message: browserSaved()
+      ? 'The server did not respond. Wait a moment, then try again.'
+      : 'The model server is not responding. Check that the Drone Design Studio window is still open, then try again.'};
+  }
+  S.result = {mode, kind, req: body, data, sel: 0};
+  setBusy(false);
+  renderWork();
+}
+function setBusy(b) {
+  S.busy = b;
+  $('#workwrap').classList.toggle('busy', b);
+  const btn = $('#run'); if (btn) btn.disabled = b;
+  const lbl = $('#runlbl');
+  const design = S.mode === 'design';
+  if (lbl) lbl.textContent = b ? (design ? 'Generating…' : 'Analysing…') : (design ? 'Generate designs' : 'Analyse build');
+  $('#statusText').textContent = design ? 'Screening 80,000 candidate builds' : 'Running ML model and physics check';
+  if (b && !S.result) $('#work').innerHTML = sheet({svg:'<div style="height:380px"></div>', notes:['Plotting first sheet.'], tb:{title:'—', dwg:'—', scale:'—', sheet:'—', mass:'—'}});
+}
+
+/* ---------------- drawing helpers ---------------- */
+const DEFS = `<defs><marker id="ah" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ahf" d="M0,1.5 L10,5 L0,8.5z"/></marker></defs>`;
+function niceScale(raw) {
+  const c = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50];
+  return c.find(x => x >= raw) || Math.ceil(raw / 10) * 10;
+}
+function balloon(item, tx, ty, bx, by) {
+  const dx = bx - tx, dy = by - ty, d = Math.hypot(dx, dy) || 1;
+  return `<g class="bal" data-item="${item}"><line class="lead" x1="${r1(tx)}" y1="${r1(ty)}" x2="${r1(bx - dx / d * 10)}" y2="${r1(by - dy / d * 10)}"/>
+    <circle class="dot" cx="${r1(tx)}" cy="${r1(ty)}" r="1.8"/><circle class="bc" cx="${r1(bx)}" cy="${r1(by)}" r="10"/>
+    <text x="${r1(bx)}" y="${r1(by + 3.7)}" text-anchor="middle">${item}</text></g>`;
+}
+function callout(px, py, qx, qy, dir, text) {
+  const sx = qx + dir * 14;
+  return `<g class="dimg"><path class="dim" marker-start="url(#ah)" d="M${P(px, py)} L${P(qx, qy)} L${P(sx, qy)}"/>
+    <text class="dimt" x="${r1(sx + dir * 4)}" y="${r1(qy + 3.8)}" text-anchor="${dir > 0 ? 'start' : 'end'}">${text}</text></g>`;
+}
+function spread(list, lo, hi, gap) {   // keep balloons in one column from overlapping
+  list.sort((a, b) => a.y - b.y);
+  for (let i = 0; i < list.length; i++) list[i].by = Math.max(lo + i * 0, i ? list[i - 1].by + gap : lo, list[i].y);
+  const over = list.length ? list[list.length - 1].by - hi : 0;
+  if (over > 0) list.forEach(b => b.by -= over);
+  return list;
+}
+const angDist = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+
+function drawMulti(n, D_in, P_in, wb) {
+  const W = 600, H = 440, cx = 300, cy = 220;
+  const R = wb / 2, pr = D_in * 25.4 / 2, ext = R + pr, N = niceScale(ext / 168), s = 1 / N;
+  const Rs = R * s, ps = pr * s, E = ext * s;
+  const bw = clamp(Rs * .46, 30, 84), bh = bw * 1.3, aw = clamp(Rs * .075, 5, 12), mr = clamp(ps * .17, 4.5, 15), fs = bw * .34;
+  const pts = [...Array(n)].map((_, i) => { const a = (i + .5) * 2 * Math.PI / n - Math.PI / 2; return {x: cx + Math.cos(a) * Rs, y: cy + Math.sin(a) * Rs, a}; });
+  const near = deg => pts.reduce((b, p) => angDist(p.a, deg * Math.PI / 180) < angDist(b.a, deg * Math.PI / 180) ? p : b);
+  const at = (deg, r) => [cx + Math.cos(deg * Math.PI / 180) * r, cy + Math.sin(deg * Math.PI / 180) * r];
+  const escPos = p => [cx + (p.x - cx) * .56, cy + (p.y - cy) * .56];
+  let o = '';
+  o += `<line class="ctr" x1="${r1(cx - E - 16)}" y1="${cy}" x2="${r1(cx + E + 16)}" y2="${cy}"/><line class="ctr" x1="${cx}" y1="${r1(cy - E - 16)}" x2="${cx}" y2="${r1(cy + E + 16)}"/>`;
+  o += `<circle class="ctr" cx="${cx}" cy="${cy}" r="${r1(Rs)}"/>`;
+  o += `<g data-item="3">${pts.map(p => `<circle class="ph" cx="${r1(p.x)}" cy="${r1(p.y)}" r="${r1(ps)}"/>`).join('')}</g>`;
+  o += `<g data-item="1">${pts.map(p => {
+      const qx = -Math.sin(p.a) * aw / 2, qy = Math.cos(p.a) * aw / 2;
+      return `<path class="ln f" pathLength="1" d="M${P(cx + qx, cy + qy)} L${P(p.x + qx, p.y + qy)} L${P(p.x - qx, p.y - qy)} L${P(cx - qx, cy - qy)}Z"/>`;
+    }).join('')}<rect class="ln f" pathLength="1" x="${r1(cx - bw / 2)}" y="${r1(cy - bh / 2)}" width="${r1(bw)}" height="${r1(bh)}" rx="${r1(bw * .14)}"/></g>`;
+  o += `<g data-item="5"><rect class="hid" x="${r1(cx - bw * .31)}" y="${r1(cy - bh * .38)}" width="${r1(bw * .62)}" height="${r1(bh * .76)}" rx="2"/></g>`;
+  o += `<g data-item="6"><rect class="ln f" pathLength="1" x="${r1(cx - fs / 2)}" y="${r1(cy - fs / 2)}" width="${r1(fs)}" height="${r1(fs)}" rx="1.5"/>
+    <path class="ln" pathLength="1" d="M${P(cx, cy - fs * .3)} L${P(cx + fs * .2, cy + fs * .14)} L${P(cx - fs * .2, cy + fs * .14)}Z"/></g>`;
+  const el = clamp(Rs * .16, 10, 26), ew = aw * 1.7;
+  o += `<g data-item="4">${pts.map(p => { const [ex, ey] = escPos(p);
+      return `<rect class="ln f" pathLength="1" x="${r1(-el / 2)}" y="${r1(-ew / 2)}" width="${r1(el)}" height="${r1(ew)}" rx="1" transform="translate(${P(ex, ey)}) rotate(${r1(p.a * 180 / Math.PI)})"/>`; }).join('')}</g>`;
+  o += `<g data-item="2">${pts.map(p => `<circle class="ln f" pathLength="1" cx="${r1(p.x)}" cy="${r1(p.y)}" r="${r1(mr)}"/>`).join('')}</g>`;
+  const L = ps * .94, w = ps * .12;
+  o += `<g data-item="3">${pts.map((p, i) => `<g transform="translate(${P(p.x, p.y)}) rotate(${(i * 47 + 20) % 180})">
+      <path class="ln f" pathLength="1" d="M0,0 Q${r1(L * .5)},${r1(-w)} ${r1(L)},0 Q${r1(L * .5)},${r1(w * .35)} 0,0Z M0,0 Q${r1(-L * .5)},${r1(w)} ${r1(-L)},0 Q${r1(-L * .5)},${r1(-w * .35)} 0,0Z"/>
+      <circle class="ln f" pathLength="1" r="${r1(mr * .42)}"/></g>`).join('')}</g>`;
+  // dimensions
+  const [pcx, pcy] = at(155, Rs), [pqx, pqy] = at(155, E + 18);
+  o += callout(pcx, pcy, pqx, pqy, -1, `Ø${fmt(wb, 0)} WHEELBASE`);
+  const m0 = near(315), [qx, qy] = at(335, E + 16);
+  o += callout(m0.x + Math.cos(m0.a) * ps, m0.y + Math.sin(m0.a) * ps, qx, qy, 1, `${n}× Ø${fmt(D_in, 1)} × ${fmt(P_in, 1)}`);
+  // balloons
+  const B = (item, tx, ty, deg) => { const [bx, by] = at(deg, E + 24); return balloon(item, tx, ty, bx, clamp(by, 14, H - 30)); };
+  const mm = near(225), mp = near(45), me = near(135), [ex, ey] = escPos(me);
+  o += B(1, cx - bw / 2, cy + bh * .22, 200);
+  o += B(2, mm.x + Math.cos(mm.a + 1.6) * mr, mm.y + Math.sin(mm.a + 1.6) * mr, 246);
+  o += B(6, cx + fs * .5, cy - fs * .5, 290);
+  o += B(3, mp.x + Math.cos(mp.a + .9) * ps, mp.y + Math.sin(mp.a + .9) * ps, 20);
+  o += B(4, ex, ey, 116);
+  o += B(5, cx - bw * .31, cy + bh * .3, 92);
+  o += `<text class="lbl" x="12" y="${H - 10}">PLAN VIEW · SCALE 1:${N}</text>`;
+  return {svg: `<svg class="dwg plot" viewBox="0 0 ${W} ${H}" role="img" aria-label="Plan view of a ${n}-rotor with ${fmt(wb, 0)} mm wheelbase">${DEFS}${o}</svg>`, N};
+}
+
+function drawFixed(span_m, AR, D_in, P_in) {
+  const W = 600, H = 440, cx = 300;
+  const b = span_m * 1000, c = b / AR, cr = c * 1.25, ct = c * .75, L = clamp(b * .62, c * 5, b * 1.1);
+  const N = niceScale(Math.max(b / 460, L / 320)), s = 1 / N;
+  const Bs = b * s, CR = cr * s, CT = ct * s, Ls = L * s, top = (H - Ls) / 2 + 2, fw = Math.max(10, Ls * .075);
+  const wy = top + Ls * .24, sw = (CR - CT) * .45;
+  const xL = t => cx - t * Bs / 2, xR = t => cx + t * Bs / 2;
+  const le = t => wy + sw * t, ch = t => CR + (CT - CR) * t, te = t => le(t) + ch(t), hinge = t => le(t) + ch(t) * .72;
+  const hs = Math.max(Bs * .3, 50), hc = Math.max(CR * .62, 10), ty = top + Ls - hc - 1;
+  const Pw = D_in * 25.4 * s;
+  let o = '';
+  o += `<line class="ctr" x1="${cx}" y1="${r1(top - 18)}" x2="${cx}" y2="${r1(top + Ls + 14)}"/>`;
+  const wing = `M${P(cx, wy)} L${P(xR(1), le(1))} L${P(xR(1), te(1))} L${P(cx, wy + CR)} L${P(xL(1), te(1))} L${P(xL(1), le(1))}Z`;
+  const ail = side => { const x = side > 0 ? xR : xL;
+    return `M${P(x(.5), te(.5))} L${P(x(.5), hinge(.5))} L${P(x(.95), hinge(.95))} L${P(x(.95), te(.95))}`; };
+  const tail = `M${P(cx, ty)} L${P(cx + hs / 2, ty + hc * .3)} L${P(cx + hs / 2, ty + hc)} L${P(cx - hs / 2, ty + hc)} L${P(cx - hs / 2, ty + hc * .3)}Z`;
+  const fus = `M${P(cx - fw * .38, top + 6)} Q${P(cx, top - 3)} ${P(cx + fw * .38, top + 6)} L${P(cx + fw / 2, top + Ls * .3)} L${P(cx + fw * .16, top + Ls)} L${P(cx - fw * .16, top + Ls)} L${P(cx - fw / 2, top + Ls * .3)}Z`;
+  o += `<g data-item="1"><path class="ln f" pathLength="1" d="${wing}"/><path class="ln thin" pathLength="1" d="${ail(1)}"/><path class="ln thin" pathLength="1" d="${ail(-1)}"/>
+    <path class="ln f" pathLength="1" d="${tail}"/><path class="ln f" pathLength="1" d="${fus}"/>
+    <rect class="ln f fin" pathLength="1" x="${r1(cx - 1.8)}" y="${r1(ty - hc * .45)}" width="3.6" height="${r1(top + Ls - ty + hc * .45)}"/></g>`;
+  const mh = Math.max(8, Ls * .05), eh = Math.max(10, Ls * .06), bh = Math.max(16, Ls * .15), fh = Math.max(8, Ls * .05);
+  const my = top + 3, ey = my + mh + 4, by = wy - Ls * .04, fy = wy + CR + 6;
+  o += `<g data-item="2"><rect class="hid" x="${r1(cx - fw * .3)}" y="${r1(my)}" width="${r1(fw * .6)}" height="${r1(mh)}"/></g>`;
+  o += `<g data-item="4"><rect class="hid" x="${r1(cx - fw * .27)}" y="${r1(ey)}" width="${r1(fw * .54)}" height="${r1(eh)}"/></g>`;
+  o += `<g data-item="5"><rect class="hid" x="${r1(cx - fw * .36)}" y="${r1(by)}" width="${r1(fw * .72)}" height="${r1(bh)}"/></g>`;
+  o += `<g data-item="6"><rect class="hid" x="${r1(cx - fw * .28)}" y="${r1(fy)}" width="${r1(fw * .56)}" height="${r1(fh)}"/></g>`;
+  const sv = x => `<rect class="hid" x="${r1(x - 5)}" y="${r1(hinge(.62) - 10)}" width="10" height="7"/>`;
+  o += `<g data-item="7">${sv(xL(.62))}${sv(xR(.62))}</g>`;
+  o += `<g data-item="3"><rect class="ln f" pathLength="1" x="${r1(cx - Pw / 2)}" y="${r1(top - 8)}" width="${r1(Pw)}" height="3.4" rx="1.5"/>
+    <path class="ln f" pathLength="1" d="M${P(cx - fw * .3, top + 1)} Q${P(cx, top - 10)} ${P(cx + fw * .3, top + 1)}Z"/></g>`;
+  // dimensions
+  const yd = top + Ls + 22;
+  o += `<g class="dimg"><line class="dim" x1="${r1(xL(1))}" y1="${r1(te(1) + 3)}" x2="${r1(xL(1))}" y2="${r1(yd + 6)}"/>
+    <line class="dim" x1="${r1(xR(1))}" y1="${r1(te(1) + 3)}" x2="${r1(xR(1))}" y2="${r1(yd + 6)}"/>
+    <line class="dim" marker-start="url(#ah)" marker-end="url(#ah)" x1="${r1(xL(1))}" y1="${r1(yd)}" x2="${r1(xR(1))}" y2="${r1(yd)}"/>
+    <text class="dimt" x="${r1(cx + Bs / 4)}" y="${r1(yd - 5)}" text-anchor="middle">${fmt(b, 0)} SPAN</text></g>`;
+  o += callout(cx + Pw / 2, top - 6.3, cx + Pw / 2 + 24, top - 24, 1, `Ø${fmt(D_in, 1)} × ${fmt(P_in, 1)}`);
+  o += callout(xR(.3), te(.3), xR(.3) + 26, te(.3) + 30, 1, `MEAN CHORD ${fmt(c, 0)}`);
+  // balloons in side columns
+  const left = spread([{i:3, x:cx - Pw / 2, y:top - 6.3}, {i:2, x:cx - fw * .3, y:my + mh / 2}, {i:1, x:xL(.3), y:le(.3) + ch(.3) * .45}, {i:7, x:xL(.62) - 5, y:hinge(.62) - 6.5}], 18, H - 34, 28);
+  const right = spread([{i:4, x:cx + fw * .27, y:ey + eh / 2}, {i:5, x:cx + fw * .36, y:by + bh / 2}, {i:6, x:cx + fw * .28, y:fy + fh / 2}], 18, H - 34, 28);
+  o += left.map(q => balloon(q.i, q.x, q.y, 24, q.by)).join('') + right.map(q => balloon(q.i, q.x, q.y, W - 24, q.by)).join('');
+  o += `<text class="lbl" x="12" y="${H - 10}">PLAN VIEW · SCALE 1:${N}</text>`;
+  return {svg: `<svg class="dwg plot" viewBox="0 0 ${W} ${H}" role="img" aria-label="Plan view of a fixed-wing with ${fmt(span_m, 2)} m span">${DEFS}${o}</svg>`, N};
+}
+
+/* ---------------- sheet ---------------- */
+const today = new Date().toISOString().slice(0, 10);
+function sheet({svg, stamp = '', notes = [], tb}) {
+  return `<div class="sheet">
+    <div class="inner"><div class="draw">${svg}${stamp}</div>
+      <div class="foot"><div class="notes"><h4>Notes</h4><ol>${notes.map(n => `<li>${n}</li>`).join('')}</ol></div>
+        <div class="tb">
+          <div class="w3 maker"><b>Drone Design Studio</b><span>Designed by Yafai</span></div>
+          <div class="w3 ttl"><span class="k">Title</span><span class="v">${esc(tb.title)}</span></div>
+          <div><span class="k">Dwg no.</span><span class="v">${esc(tb.dwg)}</span></div>
+          <div><span class="k">Scale</span><span class="v">${esc(tb.scale)}</span></div>
+          <div><span class="k">Sheet</span><span class="v">${esc(tb.sheet)}</span></div>
+          <div><span class="k">Mass</span><span class="v">${esc(tb.mass)}</span></div>
+          <div><span class="k">Date</span><span class="v">${today}</span></div>
+          <div><span class="k">Rev</span><span class="v">A</span></div>
+        </div></div></div></div>`;
+}
+const CRAFT = n => ({4:'Quadcopter', 6:'Hexacopter', 8:'Octocopter'}[n] || `${n}-rotor`);
+
+const limitState = (v, lim, dir) => dir === 'max' ? (v > lim ? 'over' : v > lim * .9 ? 'marg' : 'ok') : (v < lim ? 'over' : v < lim * 1.1 ? 'marg' : 'ok');
+function limit(v, lim, dir, d, unit) {
+  if (lim == null) return '<td class="lim">—</td><td></td><td></td>';
+  const max = Math.max(v, lim) * 1.3, st = limitState(v, lim, dir);
+  const label = {ok:'OK', marg:'Marginal', over: dir === 'max' ? 'Over' : 'Under'}[st];
+  return `<td class="lim">${dir === 'max' ? '≤' : '≥'} ${fmt(lim, d)}${unit ? ' ' + unit : ''}</td>
+    <td><span class="gauge" title="${label}"><i class="${st}" style="width:${clamp(v / max * 100, 2, 100)}%"></i><b style="left:${lim / max * 100}%"></b></span></td>
+    <td><span class="st ${st}">${label}</span></td>`;
+}
+function perfTable(rows) {
+  return `<div class="scroll"><table><thead><tr><th>Metric</th><th class="n">Value</th><th>Limit</th><th>Margin</th><th>Status</th></tr></thead><tbody>
+    ${rows.map(([name, v, unit, d, lim, dir]) => `<tr><td>${name}</td><td class="n">${fmt(v, d)}<span class="u">${unit}</span></td>${limit(v, lim, dir, d, unit)}</tr>`).join('')}
+    </tbody></table></div>`;
+}
+function perfRows(kind, s, minFlight) {
+  if (kind === 'multirotor') return [
+    ['Hover flight time', s.flight_min, 'min', 1, minFlight, 'min'],
+    ['All-up weight', s.auw_kg, 'kg', 2],
+    ['Thrust / weight', s.tw_ratio, '', 2, 1.8, 'min'],
+    ['Hover throttle', s.hover_throttle_pct, '%', 0, 75, 'max'],
+    ['Hover power', s.hover_power_w, 'W', 0],
+    ['Peak current, total', s.max_current_a, 'A', 0],
+    ['ESC current per motor', s.esc_rating_a, 'A', 0, 120, 'max'],
+    ['Battery discharge', s.battery_c_needed, 'C', 1, 120, 'max'],
+    ['Prop tip speed', s.tip_mach, 'Mach', 2, 0.7, 'max'],
+  ];
+  return [
+    ['Flight time', s.flight_min, 'min', 0, minFlight, 'min'],
+    ['Range', s.range_km, 'km', 0],
+    ['Cruise speed', s.cruise_speed_ms, 'm/s', 1],
+    ['Stall speed', s.stall_speed_ms, 'm/s', 1],
+    ['All-up weight', s.auw_kg, 'kg', 2],
+    ['Wing loading', s.wing_loading_gm2 / 100, 'g/dm²', 0],
+    ['Cruise power', s.cruise_power_w, 'W', 0],
+    ['Static thrust / weight', s.tw_ratio, '', 2, 0.4, 'min'],
+    ['Prop pitch speed', s.pitch_speed_ms, 'm/s', 0, s.cruise_speed_ms * 1.3, 'min'],
+    ['ESC current', s.esc_rating_a, 'A', 0, 100, 'max'],
+    ['Battery discharge', s.battery_c_needed, 'C', 1, 100, 'max'],
+    ['Prop tip speed', s.tip_mach, 'Mach', 2, 0.7, 'max'],
+  ];
+}
+function bomTable(rows) {
+  return `<div class="scroll"><table><thead><tr><th style="width:52px">Item</th><th class="n" style="width:44px">Qty</th><th style="width:28%">Part</th><th>Specification</th></tr></thead><tbody>
+    ${rows.map(([i, q, part, spec, sub]) => `<tr data-item="${i}" tabindex="0"><td><span class="bn">${i}</span></td><td class="n">${q}</td><td><b>${part}</b></td><td>${spec}${sub ? `<span class="sub">${sub}</span>` : ''}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+function bomRows(kind, x, s, extra) {
+  const multi = kind === 'multirotor', n = multi ? x.n_motors : 1;
+  const rows = multi
+    ? [[1, 1, 'Frame', `${n}-arm, ${fmt(s.wheelbase_mm, 0)} mm wheelbase`]]
+    : [[1, 1, 'Airframe', `${fmt(x.span_m, 2)} m span, aspect ratio ${fmt(x.aspect, 1)}`, `Wing area ${fmt(x.span_m ** 2 / x.aspect, 2)} m² · mean chord ${fmt(x.span_m / x.aspect * 1000, 0)} mm`]];
+  rows.push([2, n, 'Motor', `${fmt(x.kv, 0)} KV, ${extra.motor_class} class`, `Up to ${fmt(s.motor_max_w, 0)} W${multi ? ' each' : ''}`]);
+  rows.push([3, n, 'Propeller', `${fmt(x.D_in, 1)} × ${fmt(x.P_in, 1)} in`, multi ? `${n / 2} CW, ${n / 2} CCW` : 'Tractor, nose-mounted']);
+  rows.push([4, n, 'ESC', `${fmt(s.esc_rating_a, 0)} A or higher`]);
+  rows.push([5, 1, 'Battery', `${x.cells}S LiPo, ${fmt(x.mah, 0)} mAh`, `Rated ${extra.battery_c}C or higher`]);
+  rows.push([6, 1, 'Flight controller', extra.avionics]);
+  if (!multi) rows.push([7, 4, 'Servo', 'Ailerons, elevator, rudder']);
+  return rows;
+}
+
+function condNote(c) {
+  return `Performance at ${condText(c)}. Flight time lands with ${fmt(c.reserve_pct, 0)}% battery left.`;
+}
+function renderWork() {
+  if (S.view === 'compare') return renderCompare();
+  if (S.view === 'library') return renderLibrary();
+  const R = S.result;
+  if (!R) return;
+  if (!R.data.ok) return renderFail(R);
+  return R.mode === 'design' ? renderDesign(R) : renderCheck(R);
+}
+
+/* ---------------- result layout: header, summary, section tabs ---------------- */
+const PANELS = [['drawing', 'Drawing'], ['perf', 'Performance & parts'], ['anl', 'Analysis'], ['sweep', 'Trade study']];
+function resultHead(title, sub, design) {
+  return `<div class="res-head"><div class="res-title"><h2>${title}</h2><p>${sub}</p></div>
+    <div class="ractions">
+      ${design ? `<button type="button" class="tbtn pri" data-act="tweak" title="Open this design in Check a build to change parts">${icon('tweak')}Tweak</button>` : ''}
+      <button type="button" class="tbtn" data-act="save">${icon('save')}Save</button>
+      <details class="menu"><summary class="tbtn">${icon('csv')}Export</summary>
+        <div class="menu-pop">
+          <button type="button" data-act="report">${icon('report')}<span>Design report<small>Multi-page PDF</small></span></button>
+          <button type="button" data-act="print">${icon('print')}<span>Print drawing<small>The drawing sheet only</small></span></button>
+          <button type="button" data-act="csv">${icon('csv')}<span>Parts list<small>CSV for spreadsheets</small></span></button>
+        </div></details>
+    </div></div>`;
+}
+function limitStatus(rows) {
+  const flagged = rows.filter(r => r[4] != null).map(([name, v, , , lim, dir]) => ({name, st: limitState(v, lim, dir)})).filter(x => x.st !== 'ok');
+  const over = flagged.filter(x => x.st === 'over'), marg = flagged.filter(x => x.st === 'marg');
+  const list = xs => xs.map(x => x.name.toLowerCase()).join(', ');
+  if (over.length) return {cls: 'bad', head: `${over.length} limit${over.length > 1 ? 's' : ''} exceeded`, text: `Over the limit: ${list(over)}.`};
+  if (marg.length) return {cls: 'warn', head: 'All limits met, some are close', text: `Within 10% of the limit: ${list(marg)}.`};
+  return {cls: 'ok', head: 'All limits met', text: 'Every physics check has at least 10% margin.'};
+}
+const VICON = {
+  ok: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  warn: '<path d="M12 7v6M12 16.5v.5"/>',
+  bad: '<path d="M7 7l10 10M17 7L7 17"/>',
+};
+function summaryStrip(kind, s, rows) {
+  const multi = kind === 'multirotor', st = limitStatus(rows);
+  const k = multi
+    ? [['Hover flight time', fmt(s.flight_min, 1), 'min'], ['All-up weight', fmt(s.auw_kg, 2), 'kg'], ['Thrust / weight', fmt(s.tw_ratio, 1), ''], ['Hover throttle', fmt(s.hover_throttle_pct, 0), '%']]
+    : [['Flight time', fmt(s.flight_min, 0), 'min'], ['Range', fmt(s.range_km, 0), 'km'], ['Cruise speed', fmt(s.cruise_speed_ms, 1), 'm/s'], ['All-up weight', fmt(s.auw_kg, 2), 'kg']];
+  return `<div class="sumbar"><div class="kpis">${k.map(([l, v, u]) => `<div class="kpi"><span class="kl">${l}</span><span class="kv">${v}${u ? `<small> ${u}</small>` : ''}</span></div>`).join('')}</div>
+    <div class="verdict ${st.cls}"><span class="vi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${VICON[st.cls]}</svg></span>
+      <div><b>${st.head}</b><span>${st.text}</span></div></div></div>`;
+}
+function panels(content) {
+  if (!PANELS.some(p => p[0] === S.panel)) S.panel = 'drawing';
+  return `<div class="ptabs" role="tablist" aria-label="Result sections">${PANELS.map(([k, l]) =>
+      `<button type="button" role="tab" id="pt_${k}" data-panel="${k}" aria-selected="${S.panel === k}" aria-controls="pp_${k}">${l}</button>`).join('')}</div>`
+    + PANELS.map(([k]) => `<div class="ppanel" role="tabpanel" id="pp_${k}" aria-labelledby="pt_${k}"${S.panel === k ? '' : ' hidden'}>${content[k]}</div>`).join('');
+}
+function showPanel(k) {
+  S.panel = k;
+  $$('.ptabs [data-panel]', work).forEach(b => b.setAttribute('aria-selected', b.dataset.panel === k));
+  $$('.ppanel', work).forEach(p => { p.hidden = p.id !== `pp_${k}`; });
+}
+const condShort = c => `${fmt(c.alt_m, 0)} m, ${fmt(c.temp_c, 0)} °C, land at ${fmt(c.reserve_pct, 0)}%`;
+
+function renderDesign(R) {
+  const {data, req, sel} = R, multi = data.kind === 'multirotor', o = data.options[sel], cnt = data.options.length;
+  const dw = multi ? drawMulti(o.n_motors, o.D_in, o.P_in, o.wheelbase_mm) : drawFixed(o.span_m, o.aspect, o.D_in, o.P_in);
+  const tabs = `<div class="opts" role="tablist" aria-label="Design options">${data.options.map((x, i) => `<button type="button" role="tab" aria-selected="${i === sel}" data-opt="${i}">
+      <span class="on">Option ${i + 1}</span><span class="os">${fmt(x.flight_min, multi ? 1 : 0)} min · ${fmt(x.auw_kg, 2)} kg · ${x.cells}S ${fmt(x.mah, 0)} mAh</span></button>`).join('')}</div>`;
+  const title = `${multi ? CRAFT(o.n_motors) : 'Fixed-wing'}, ${fmt(req.payload_kg, 1)} kg payload`;
+  const dwg = `${multi ? 'MR' + o.n_motors : 'FW'}-${fmt(req.payload_kg, 1)}KG-${req.min_flight_min}MIN-${String(sel + 1).padStart(2, '0')}`;
+  const notes = [
+    'Dimensions in mm unless noted. Propellers as diameter × pitch in inches.',
+    multi ? `Propellers alternate CW and CCW. Fit ${o.cells}S LiPo rated ${o.battery_c}C or higher.`
+          : `Wing area ${fmt(o.wing_area_m2, 2)} m². Cruise is set at 1.5 × stall speed (${fmt(o.cruise_speed_ms, 1)} m/s).`,
+    `Hidden lines show internal parts. Balloons match the bill of materials.`,
+    condNote(data.conditions),
+  ].concat(data.conditions.rho !== 1.225 ? ['ML screening does not account for altitude or temperature. Every option was rechecked with physics at these conditions.'] : []);
+  const stamp = '';
+  const bom = bomRows(data.kind, o, o, o);
+  S.cur = {kind: data.kind, parts: partsOf(data.kind, o), metrics: metricsOf(o), name: `${title} · ${dwg}`, dwg, bom, title,
+    env: req.env, cond: data.conditions, ok: true, verdict: 'Physics check passed', sheetNo: `${sel + 1} of ${cnt}`};
+  const rows = perfRows(data.kind, o, req.min_flight_min);
+  const head = resultHead(`${cnt} design${cnt > 1 ? 's' : ''} found`,
+    `${multi ? 'Multirotor' : 'Fixed-wing'} carrying ${fmt(req.payload_kg, 1)} kg for at least ${req.min_flight_min} min · ranked by ${req.goal === 'light' ? 'lowest weight' : 'longest flight'} · ${condShort(data.conditions)}`, true);
+  $('#work').innerHTML = head + tabs + summaryStrip(data.kind, o, rows) + panels({
+      drawing: sheet({svg: dw.svg, stamp, notes, tb: {title, dwg, scale: `1:${dw.N}`, sheet: `${sel + 1} of ${cnt}`, mass: `${fmt(o.auw_kg, 2)} kg`}}),
+      perf: `<div class="tables">
+        <section class="tsec"><h3>Performance <small>physics simulation</small></h3>${perfTable(rows)}</section>
+        <section class="tsec"><h3>Parts list <small>numbers match the drawing</small></h3>${bomTable(bom)}</section></div>`,
+      anl: analysisSection(), sweep: sweepSection(data.kind)}) +
+    `<p class="foot-note">Designs come from a random search, so generating again can return different builds.</p>`;
+  S.anlP = loadAnalysis(); S.swP = loadSweep();
+}
+
+const METRIC = {
+  auw_kg:['All-up weight','kg',2], flight_min:['Flight time','min',1], tw_ratio:['Thrust / weight','',2],
+  hover_throttle_pct:['Hover throttle','%',0], max_current_a:['Peak current','A',0], hover_power_w:['Hover power','W',0],
+  stall_speed_ms:['Stall speed','m/s',1], cruise_speed_ms:['Cruise speed','m/s',1], range_km:['Range','km',1],
+};
+function renderCheck(R) {
+  const d = R.data, multi = d.kind === 'multirotor', s = d.physics, p = d.parts;
+  const prob = d.ml_feasible_prob, ok = d.physics_feasible && prob > .5;
+  const dw = multi ? drawMulti(p.n_motors, p.D_in, p.P_in, s.wheelbase_mm) : drawFixed(p.span_m, p.aspect, p.D_in, p.P_in);
+  const ft = d.metrics.find(m => m.name === 'flight_min');
+  const agree = ft ? Math.abs(ft.ml - ft.physics) / ft.physics * 100 : null;
+  const notes = ['Dimensions in mm unless noted. Propellers as diameter × pitch in inches.', condNote(d.conditions)]
+    .concat(d.tips.length ? d.tips.map(t => esc(t.charAt(0).toUpperCase() + t.slice(1).replace(' -> ', ': '))) : ['No problems found against the physics limits.'])
+    .concat(agree != null ? [`ML model and physics agree on flight time within ${fmt(agree, 1)}%.`] : []);
+  const stamp = '';
+  const title = `${multi ? CRAFT(p.n_motors) : 'Fixed-wing'} build check`;
+  const dwg = `${multi ? 'MR' + p.n_motors : 'FW'}-CHK-${p.kv}KV-${p.cells}S`;
+  const dev = `<div class="scroll"><table><thead><tr><th>Metric</th><th class="n">ML model</th><th class="n">Physics</th><th class="n">Difference</th><th></th></tr></thead><tbody>
+    ${d.metrics.map(m => { const [lab, unit, dd] = METRIC[m.name] || [m.name, '', 2];
+      const dp = m.physics ? (m.ml - m.physics) / Math.abs(m.physics) * 100 : 0, w = clamp(Math.abs(dp), 0, 25) / 25 * 50;
+      return `<tr><td>${lab}</td><td class="n">${fmt(m.ml, dd)}<span class="u">${unit}</span></td><td class="n">${fmt(m.physics, dd)}<span class="u">${unit}</span></td>
+        <td class="n">${dp >= 0 ? '+' : '−'}${fmt(Math.abs(dp), 1)}%</td>
+        <td><span class="dev" title="ML vs physics, ±25% scale"><i style="${dp >= 0 ? `left:50%;width:${w}%` : `right:50%;width:${w}%`}"></i></span></td></tr>`; }).join('')}
+    </tbody></table></div>`;
+  const extra = {motor_class: d.motor_class, battery_c: Math.max(multi ? 25 : 20, Math.ceil(s.battery_c_needed * 1.1)),
+    avionics: multi ? (s.wheelbase_mm > 350 || p.payload_kg > .3 ? 'ArduPilot or PX4 with GPS' : 'Betaflight or INAV F4/F7') : 'ArduPilot or INAV plane with GPS'};
+  const bom = bomRows(d.kind, p, s, extra);
+  S.cur = {kind: d.kind, parts: p, metrics: metricsOf(s), name: `${title} · ${dwg}`, dwg, bom, title,
+    env: R.req.env, cond: d.conditions, ok, verdict: ok ? 'Feasible' : 'Not feasible', sheetNo: '1 of 1', mlProb: prob};
+  const rows = perfRows(d.kind, s, multi ? 2 : 3);
+  const spec = multi ? `${p.n_motors} × ${fmt(p.kv, 0)} KV · ${fmt(p.D_in, 1)} × ${fmt(p.P_in, 1)} in props` : `${fmt(p.span_m, 2)} m span · ${fmt(p.kv, 0)} KV · ${fmt(p.D_in, 1)} × ${fmt(p.P_in, 1)} in prop`;
+  const head = resultHead(title, `${spec} · ${p.cells}S ${fmt(p.mah, 0)} mAh · ${fmt(p.payload_kg, 1)} kg payload · ${condShort(d.conditions)}`, false);
+  $('#work').innerHTML = head + summaryStrip(d.kind, s, rows) + panels({
+      drawing: sheet({svg: dw.svg, stamp, notes, tb: {title, dwg, scale: `1:${dw.N}`, sheet: '1 of 1', mass: `${fmt(s.auw_kg, 2)} kg`}}),
+      perf: `<div class="tables">
+        <section class="tsec"><h3>Limits <small>physics simulation</small></h3>${perfTable(rows)}</section>
+        <section class="tsec"><h3>ML model vs physics <small>difference, ±25% scale</small></h3>${dev}</section>
+        <section class="tsec wide"><h3>Parts list <small>numbers match the drawing</small></h3>${bomTable(bom)}</section></div>`,
+      anl: analysisSection(), sweep: sweepSection(d.kind)});
+  S.anlP = loadAnalysis(); S.swP = loadSweep();
+}
+
+/* ---------------- toolbar actions ---------------- */
+const ICO = {
+  tweak:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',
+  save:'<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
+  print:'<path d="M6 9V3h12v6M6 18H4v-8h16v8h-2"/><path d="M7 14h10v7H7z"/>',
+  csv:'<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>',
+  back:'<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  report:'<path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5M9 12h7M9 16h7M9 8h3"/>',
+};
+const icon = k => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">${ICO[k]}</svg>`;
+function partsOf(kind, o) {
+  const keys = kind === 'multirotor' ? ['n_motors', 'D_in', 'P_in', 'kv', 'cells', 'mah', 'payload_kg']
+                                     : ['span_m', 'aspect', 'D_in', 'P_in', 'kv', 'cells', 'mah', 'payload_kg'];
+  return Object.fromEntries(keys.map(k => [k, o[k]]));
+}
+function metricsOf(s) {
+  const m = {};
+  for (const k of ['flight_min', 'auw_kg', 'tw_ratio', 'hover_throttle_pct', 'max_current_a', 'range_km', 'cruise_speed_ms', 'stall_speed_ms', 'wheelbase_mm'])
+    if (s[k] != null && isFinite(s[k])) m[k] = s[k];
+  m.feasible = s.feasible ? 1 : 0;
+  return m;
+}
+function loadIntoCheck(kind, parts, env) {
+  if (env) S.env = {alt_m: env.alt_m ?? 0, temp_c: env.standard_day || env.temp_c == null ? null : env.temp_c, reserve_pct: env.reserve_pct ?? 20};
+  const v = {...parts};
+  if (kind === 'multirotor') v.n_motors = String(parts.n_motors);
+  S.kind = kind; S.mode = 'check'; S.values[`${kind}:check`] = v;
+  persist(); renderAside(); run();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+let toastTimer;
+function toast(msg) {
+  let t = $('#toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2600);
+}
+/* Saved builds live in saved_builds.json for the local app, or in this browser on hosted sites. */
+const LS_SAVED = 'dds-saved-builds';
+const browserSaved = () => !!(S.info && S.info.saved === 'browser');
+function lsSaved() {
+  try { const v = JSON.parse(localStorage.getItem(LS_SAVED) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+}
+function lsWrite(items) {
+  try { localStorage.setItem(LS_SAVED, JSON.stringify(items)); return true; } catch (e) { return false; }
+}
+async function saveCurrent() {
+  const c = S.cur; if (!c) return;
+  if (browserSaved()) {
+    const items = lsSaved();
+    const pad = n => String(n).padStart(2, '0'), now = new Date();
+    items.push({id: Math.random().toString(16).slice(2, 12), name: c.name, kind: c.kind, parts: c.parts, metrics: c.metrics, env: c.cond,
+      saved: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`});
+    if (!lsWrite(items)) return toast('Could not save. Your browser is blocking site storage.');
+    S.saved = items; renderSaved(); return toast(`Saved “${c.name}” in this browser`);
+  }
+  try {
+    const r = await fetch('/api/saved', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({kind: c.kind, parts: c.parts, name: c.name, metrics: c.metrics, env: c.env})});
+    const d = await r.json();
+    if (!d.ok) return toast(d.message);
+    S.saved = d.items; renderSaved(); toast(`Saved “${c.name}”`);
+  } catch (e) { toast('Could not save. Check that the app window is still open.'); }
+}
+function exportCsv() {
+  const c = S.cur; if (!c) return;
+  const strip = s => String(s ?? '').replace(/<[^>]+>/g, '');
+  const q = s => `"${strip(s).replace(/"/g, '""')}"`;
+  const lines = [['Item', 'Qty', 'Part', 'Specification', 'Notes'].join(',')]
+    .concat(c.bom.map(([i, n, part, spec, sub]) => [i, n, q(part), q(spec), q(sub)].join(',')));
+  const blob = new Blob(['﻿' + lines.join('\r\n')], {type: 'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `${c.dwg}-parts.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast(`Downloaded ${c.dwg}-parts.csv`);
+}
+let themeBeforePrint = null;
+window.addEventListener('beforeprint', () => { themeBeforePrint = root.dataset.theme ?? ''; root.dataset.theme = 'light'; });
+window.addEventListener('afterprint', () => { if (themeBeforePrint) root.dataset.theme = themeBeforePrint; else delete root.dataset.theme; syncTheme(); });
+
+/* ---------------- saved builds ---------------- */
+function renderSaved() {
+  const box = $('#savedBox'); if (!box) return;
+  const items = S.saved || [];
+  const line = it => `${it.kind === 'multirotor' ? CRAFT(it.parts.n_motors) : 'Fixed-wing'} · ${fmt(it.metrics.flight_min, 1)} min · ${fmt(it.metrics.auw_kg, 2)} kg`;
+  box.innerHTML = `<p class="cap" style="margin:0 0 2px">Saved builds</p>` + (items.length
+    ? items.slice().reverse().map(it => `<div class="sv"><button type="button" class="open" data-open="${esc(it.id)}" title="Open in check mode"><b>${esc(it.name)}</b><small>${line(it)}</small></button>
+        <button type="button" class="del" data-del="${esc(it.id)}" aria-label="Delete ${esc(it.name)}">Delete</button></div>`).join('')
+      + (items.length >= 2 ? `<button type="button" class="tbtn" data-act="compare">Compare ${items.length} builds</button>` : '')
+    : '<p class="empty">Nothing saved yet. Use Save build on any sheet.</p>');
+}
+function openSaved(id) {
+  const it = (S.saved || []).find(x => x.id === id);
+  if (it && !S.busy) loadIntoCheck(it.kind, it.parts, it.env);
+}
+async function deleteSaved(btn) {
+  if (!btn.classList.contains('armed')) {
+    btn.classList.add('armed'); btn.textContent = 'Confirm';
+    setTimeout(() => { if (btn.isConnected) { btn.classList.remove('armed'); btn.textContent = 'Delete'; } }, 3000);
+    return;
+  }
+  if (browserSaved()) {
+    const items = lsSaved().filter(x => x.id !== btn.dataset.del);
+    lsWrite(items); S.saved = items; renderSaved(); if (S.view === 'compare') renderWork();
+    return toast('Build deleted');
+  }
+  try {
+    const r = await fetch(`/api/saved/${encodeURIComponent(btn.dataset.del)}`, {method: 'DELETE'});
+    const d = await r.json();
+    if (d.ok) { S.saved = d.items; renderSaved(); if (S.view === 'compare') renderWork(); toast('Build deleted'); }
+  } catch (e) { toast('Could not delete. Check that the app window is still open.'); }
+}
+function renderCompare() {
+  const items = S.saved || [];
+  if (items.length < 1) { S.view = null; return renderWork(); }
+  const M = it => it.metrics || {}, multi = it => it.kind === 'multirotor';
+  const rows = [
+    ['Configuration'],
+    ['Type', it => ({t: multi(it) ? CRAFT(it.parts.n_motors) : 'Fixed-wing'})],
+    ['Size', it => multi(it) ? {t: `${fmt(M(it).wheelbase_mm, 0)} mm wheelbase`} : {t: `${fmt(it.parts.span_m, 2)} m span, AR ${fmt(it.parts.aspect, 1)}`}],
+    ['Propeller', it => ({t: `${fmt(it.parts.D_in, 1)} × ${fmt(it.parts.P_in, 1)} in`})],
+    ['Motor', it => ({t: `${fmt(it.parts.kv, 0)} KV`})],
+    ['Battery', it => ({t: `${it.parts.cells}S ${fmt(it.parts.mah, 0)} mAh`})],
+    ['Payload', it => ({v: it.parts.payload_kg, t: `${fmt(it.parts.payload_kg, 1)} kg`})],
+    ['Conditions', it => ({t: it.env ? `${fmt(it.env.alt_m, 0)} m, ${fmt(it.env.temp_c, 0)} °C, land at ${fmt(it.env.reserve_pct, 0)}%` : 'Sea level, 15 °C, land at 20%'})],
+    ['Performance (physics)'],
+    ['Flight time', it => ({v: M(it).flight_min, t: `${fmt(M(it).flight_min, 1)} min`}), 'max'],
+    ['All-up weight', it => ({v: M(it).auw_kg, t: `${fmt(M(it).auw_kg, 2)} kg`}), 'min'],
+    ['Thrust / weight', it => ({v: M(it).tw_ratio, t: fmt(M(it).tw_ratio, 2)})],
+    ['Hover throttle', it => multi(it) ? {t: `${fmt(M(it).hover_throttle_pct, 0)} %`} : {t: '—'}],
+    ['Cruise speed', it => multi(it) ? {t: '—'} : {t: `${fmt(M(it).cruise_speed_ms, 1)} m/s`}],
+    ['Range', it => multi(it) ? {t: '—'} : {v: M(it).range_km, t: `${fmt(M(it).range_km, 0)} km`}, 'max'],
+    ['Peak current', it => ({v: M(it).max_current_a, t: `${fmt(M(it).max_current_a, 0)} A`}), 'min'],
+    ['Physics limits', it => ({t: M(it).feasible ? '<span class="st ok">Pass</span>' : '<span class="st over">Fail</span>'})],
+  ];
+  const body = rows.map(([label, fn, better]) => {
+    if (!fn) return `<tr><td class="grp" colspan="${items.length + 1}">${label}</td></tr>`;
+    const cells = items.map(fn);
+    let best = null;
+    if (better) {
+      const vs = cells.map(c => c.v).filter(v => v != null && isFinite(v));
+      if (vs.length > 1) best = better === 'max' ? Math.max(...vs) : Math.min(...vs);
+    }
+    return `<tr><td>${label}</td>${cells.map(c => {
+      const isBest = best != null && c.v === best;
+      return `<td class="mono${isBest ? ' best' : ''}">${c.t}${isBest ? '<span class="bt">best</span>' : ''}</td>`; }).join('')}</tr>`;
+  }).join('');
+  $('#work').innerHTML = `<div class="cmp-head"><div><h2>Compare saved builds</h2><p>${items.length} build${items.length > 1 ? 's' : ''} · best value in each row is highlighted</p></div>
+      <button type="button" class="tbtn" data-act="back">${icon('back')}Back to sheet</button></div>
+    <div class="cmpwrap"><div class="scroll"><table class="cmpt"><thead><tr><th></th>${items.map(it =>
+      `<th class="bh">${esc(it.name)}<small>Saved ${esc(it.saved || '')}</small><button type="button" class="tbtn" data-open="${esc(it.id)}">Open</button></th>`).join('')}</tr></thead>
+      <tbody>${body}</tbody></table></div></div>`;
+}
+
+/* ---------------- engineering analysis ---------------- */
+function analysisSection() {
+  return `<section class="anl" id="anl"><h3 class="h3">Engineering analysis <small>physics simulation, current sheet</small></h3>
+    <div id="anlOut"><p class="summary">Calculating weight breakdown and sensitivity…</p></div></section>`;
+}
+let anlSeq = 0;
+async function loadAnalysis() {
+  const c = S.cur; if (!c || !$('#anl')) return;
+  const seq = ++anlSeq;
+  try {
+    const r = await fetch('/api/analysis', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({kind: c.kind, ...c.parts, env: c.env})});
+    const d = await r.json();
+    if (seq !== anlSeq || !$('#anlOut')) return;
+    if (!d.ok) { $('#anlOut').innerHTML = `<p class="summary"><span class="err">${esc(d.message)}</span></p>`; return; }
+    S.anl = d;
+    drawAnalysis(d);
+  } catch (e) {
+    if (seq === anlSeq && $('#anlOut')) $('#anlOut').innerHTML = '<p class="summary"><span class="err">The analysis could not run because the model server is not responding.</span></p>';
+  }
+}
+function drawAnalysis(d) {
+  const multi = d.kind === 'multirotor', f = d.figures, auw = f.auw_kg;
+  const ms = d.masses.slice().sort((a, b) => b.kg - a.kg), mmax = Math.max(...ms.map(m => m.kg), 1e-9);
+  const heaviest = ms[0];
+  const weight = `<div class="wb">${ms.map(m => `<div class="wr"><span class="wn">${esc(m.name)}</span>
+      <span class="wbar"><i style="width:${clamp(m.kg / mmax * 100, m.kg > 0 ? 1 : 0, 100)}%"></i></span>
+      <span class="wk mono">${m.kg >= 1 ? fmt(m.kg, 2) + ' kg' : fmt(m.kg * 1000, 0) + ' g'}</span><span class="wp mono">${fmt(m.kg / auw * 100, 0)}%</span></div>`).join('')}
+    <div class="wr tot"><span class="wn">All-up weight</span><span></span><span class="wk mono">${fmt(auw, 2)} kg</span><span class="wp mono">100%</span></div></div>`;
+  const F = (k, v, note) => `<div><dt>${k}</dt><dd class="mono">${v}</dd>${note ? `<dd class="fn">${note}</dd>` : ''}</div>`;
+  const figs = `<dl class="figs">
+    ${F('Battery energy', `${fmt(f.battery_wh, 0)} Wh`, `${fmt(f.battery_frac * 100, 0)}% of all-up weight`)}
+    ${F('Payload fraction', `${fmt(f.payload_frac * 100, 0)}%`, 'Payload ÷ all-up weight')}
+    ${multi
+      ? F('Hover efficiency', `${fmt(f.g_per_w, 1)} g/W`, 'Weight lifted per watt in hover') +
+        F('Disk loading', `${fmt(f.disk_loading, 0)} N/m²`, 'Lower is more efficient') +
+        F('Hover power loading', `${fmt(f.w_per_kg, 0)} W/kg`, 'Hover power ÷ weight')
+      : F('Lift-to-drag at cruise', fmt(f.l_over_d, 1), `Cruise lift coefficient ${fmt(f.cl_cruise, 2)}`) +
+        F('Energy per km', `${fmt(f.wh_per_km, 2)} Wh/km`, 'At cruise speed') +
+        F('Cruise power loading', `${fmt(f.w_per_kg, 0)} W/kg`, 'Cruise power ÷ weight')}</dl>`;
+  // tornado chart
+  const rows = d.sensitivity, n = rows.length;
+  const W = 470, lw = 132, rw = 40, top = 10, rh = 36, H = top + n * rh + 30;
+  const mx = Math.max(.2, ...rows.flatMap(r => [Math.abs(r.lo.delta), Math.abs(r.hi.delta)]));
+  const ax = niceAxis(0, mx, 4), lim = ax.ticks[ax.ticks.length - 1] < mx ? ax.ticks[ax.ticks.length - 1] + ax.step : ax.ticks[ax.ticks.length - 1];
+  const cx = lw + (W - lw - rw) / 2, half = (W - lw - rw) / 2, X = v => cx + v / lim * half;
+  let g = '';
+  for (const t of [-lim, -lim / 2, 0, lim / 2, lim]) {
+    g += `<line class="${t === 0 ? 'zero' : 'gl'}" x1="${r1(X(t))}" x2="${r1(X(t))}" y1="${top - 4}" y2="${top + n * rh}"/>
+      <text class="ax" x="${r1(X(t))}" y="${top + n * rh + 16}" text-anchor="middle">${t > 0 ? '+' : t < 0 ? '−' : ''}${fmt(Math.abs(t), lim < 2 ? 1 : 0)}</text>`;
+  }
+  g += `<text class="ax" x="${r1(cx)}" y="${top + n * rh + 29}" text-anchor="middle">change in flight time (min)</text>`;
+  rows.forEach((r, i) => {
+    const def = SWEEP[r.param], y = top + i * rh, u = def.unit ? ' ' + def.unit : '';
+    g += `<text class="tl" x="0" y="${y + 15}">${def.label}</text><text class="tv" x="0" y="${y + 29}">${fmt(r.lo.value, def.d)} / ${fmt(r.hi.value, def.d)}${u}</text>`;
+    for (const [side, cls, dy] of [['lo', 'b-lo', 7], ['hi', 'b-hi', 19]]) {
+      const e = r[side], x0 = X(0), x1 = X(e.delta), xa = Math.min(x0, x1), w = Math.max(1.5, Math.abs(x1 - x0));
+      const tx = e.delta >= 0 ? xa + w + 4 : xa - 4;
+      g += `<g><title>${def.label} ${fmt(e.value, def.d)}${u}: ${fmt(e.flight, 1)} min (${e.delta >= 0 ? '+' : '−'}${fmt(Math.abs(e.delta), 2)})${e.feasible ? '' : ', fails limits'}</title>
+        <rect class="${cls}" x="${r1(xa)}" y="${y + dy}" width="${r1(w)}" height="10" rx="1.5"/>
+        <text class="bv" x="${r1(tx)}" y="${y + dy + 8.5}" text-anchor="${e.delta >= 0 ? 'start' : 'end'}">${e.delta >= 0 ? '+' : '−'}${fmt(Math.abs(e.delta), 1)}${e.feasible ? '' : ' ✕'}</text></g>`;
+    }
+  });
+  const anyFail = rows.some(r => !r.lo.feasible || !r.hi.feasible);
+  const lead = rows[0], ldef = SWEEP[lead.param];
+  $('#anlOut').innerHTML = `<div class="anl-grid">
+    <div><h4 class="sub">Weight breakdown</h4><p class="sublead">${esc(heaviest.name)} is the heaviest item at ${fmt(heaviest.kg / auw * 100, 0)}% of all-up weight.</p>${weight}${figs}</div>
+    <div><h4 class="sub">Flight-time sensitivity</h4><p class="sublead"><b>${ldef.label}</b> has the largest effect. Each part moves 10% down and up (cells ±1) with everything else fixed.</p>
+      <div class="legend"><span><i class="sw blk" style="opacity:.45"></i>Lower value</span><span><i class="sw blk"></i>Higher value</span>${anyFail ? '<span>✕ fails physics limits</span>' : ''}</div>
+      <div class="tornado"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Flight time sensitivity to each part">${g}</svg></div></div></div>`;
+}
+
+/* ---------------- pre-built designs library ---------------- */
+const PRESETS = [
+  {id:'fpv5', name:'5-inch freestyle FPV', tag:'FPV', desc:'Agile freestyle quad that carries an action camera.',
+   kind:'multirotor', parts:{n_motors:4, D_in:5.1, P_in:3.6, kv:1700, cells:6, mah:1500, payload_kg:0.15}},
+  {id:'lr7', name:'7-inch long-range FPV', tag:'FPV', desc:'Efficient cruiser for long-range FPV flights.',
+   kind:'multirotor', parts:{n_motors:4, D_in:7, P_in:3.5, kv:1300, cells:6, mah:3000, payload_kg:0.1}},
+  {id:'q450', name:'450 trainer quad', tag:'Training', desc:'Classic beginner frame on a 3S pack.',
+   kind:'multirotor', parts:{n_motors:4, D_in:10, P_in:4.5, kv:920, cells:3, mah:5000, payload_kg:0}},
+  {id:'cam650', name:'650 camera quad', tag:'Photography', desc:'Stable aerial photo platform with a 0.8 kg gimbal camera.',
+   kind:'multirotor', parts:{n_motors:4, D_in:15, P_in:5.5, kv:400, cells:6, mah:10000, payload_kg:0.8}},
+  {id:'hex', name:'Heavy-lift hexacopter', tag:'Heavy lift', desc:'12S hexacopter for 5 kg payloads such as sprayers or delivery boxes.',
+   kind:'multirotor', parts:{n_motors:6, D_in:18, P_in:6.1, kv:200, cells:12, mah:22000, payload_kg:5}},
+  {id:'octo', name:'Cinema octocopter', tag:'Heavy lift', desc:'Eight motors for redundancy, carrying a 4 kg cinema camera.',
+   kind:'multirotor', parts:{n_motors:8, D_in:16, P_in:5.4, kv:440, cells:6, mah:32000, payload_kg:4}},
+  {id:'trainer', name:'1.4 m trainer wing', tag:'Training', desc:'Forgiving fixed-wing for learning to fly.',
+   kind:'fixedwing', parts:{span_m:1.4, aspect:7, D_in:10, P_in:6, kv:1000, cells:3, mah:2200, payload_kg:0}},
+  {id:'map2', name:'2 m mapping wing', tag:'Mapping', desc:'Survey aircraft carrying a 0.5 kg mapping camera.',
+   kind:'fixedwing', parts:{span_m:2.0, aspect:10, D_in:12, P_in:6, kv:800, cells:4, mah:5000, payload_kg:0.5}},
+  {id:'glider', name:'2.5 m survey glider', tag:'Mapping', desc:'High aspect ratio wing for long, efficient survey lines.',
+   kind:'fixedwing', parts:{span_m:2.5, aspect:16, D_in:13, P_in:8, kv:700, cells:4, mah:8000, payload_kg:0.8}},
+  {id:'endur', name:'3 m long-endurance wing', tag:'Endurance', desc:'Carries 1.5 kg on long patrol and inspection flights.',
+   kind:'fixedwing', parts:{span_m:3.0, aspect:14, D_in:15, P_in:8, kv:350, cells:6, mah:12000, payload_kg:1.5}},
+];
+const LIB = {tag:'All', results:{}, envKey:null, seq:0};
+function presetSpec(pr) {
+  const p = pr.parts;
+  return `${pr.kind === 'multirotor' ? `${p.n_motors} × ${fmt(p.kv, 0)} KV` : `${fmt(p.span_m, 1)} m span · ${fmt(p.kv, 0)} KV`} · ${fmt(p.D_in, 1)} × ${fmt(p.P_in, 1)} in · ${p.cells}S ${fmt(p.mah, 0)} mAh · ${p.payload_kg ? `${+p.payload_kg} kg payload` : 'no payload'}`;
+}
+function presetDrawing(pr) {
+  const p = pr.parts;
+  return pr.kind === 'multirotor'
+    ? drawMulti(p.n_motors, p.D_in, p.P_in, p.D_in * 25.4 / Math.sin(Math.PI / p.n_motors) * 1.1).svg
+    : drawFixed(p.span_m, p.aspect, p.D_in, p.P_in).svg;
+}
+function presetMetrics(pr) {
+  const r = LIB.results[pr.id];
+  if (!r) return '<div class="lc-m lc-wait">Calculating…</div>';
+  if (!r.ok) return `<div class="lc-m"><span class="err">${esc(r.message || 'Could not calculate')}</span></div>`;
+  const s = r.physics, multi = pr.kind === 'multirotor', ok = r.physics_feasible;
+  const cells = multi
+    ? [['Flight', `${fmt(s.flight_min, 1)} min`], ['Weight', `${fmt(s.auw_kg, 2)} kg`], ['Thrust/wt', fmt(s.tw_ratio, 1)]]
+    : [['Flight', `${fmt(s.flight_min, 0)} min`], ['Range', `${fmt(s.range_km, 0)} km`], ['Weight', `${fmt(s.auw_kg, 2)} kg`]];
+  return `<div class="lc-m">${cells.map(([k, v]) => `<div><span class="k">${k}</span><b class="mono">${v}</b></div>`).join('')}
+    <span class="st ${ok ? 'ok' : 'over'}">${ok ? 'Pass' : 'Fail'}</span></div>`;
+}
+function renderLibrary() {
+  const tags = ['All', ...new Set(PRESETS.map(p => p.tag))];
+  const list = PRESETS.filter(p => LIB.tag === 'All' || p.tag === LIB.tag);
+  $('#work').innerHTML = `<div class="cmp-head"><div><h2>Pre-built designs</h2>
+      <p>${PRESETS.length} example builds curated by Yafai. Performance is calculated live at your conditions: ${esc(envSummary())}.</p></div>
+      <button type="button" class="tbtn" data-act="back">${icon('back')}Back to sheet</button></div>
+    <div class="chips lib-tags" role="group" aria-label="Filter by use">${tags.map(t => `<button type="button" data-libtag="${esc(t)}" aria-pressed="${t === LIB.tag}">${esc(t)}</button>`).join('')}</div>
+    <div class="lib">${list.map(pr => `<article class="lc" id="lc_${pr.id}">
+        <div class="lc-top"><span class="tag">${esc(pr.tag)}</span><span>${pr.kind === 'multirotor' ? CRAFT(pr.parts.n_motors) : 'Fixed-wing'}</span></div>
+        <div class="lc-draw">${presetDrawing(pr)}</div>
+        <h3>${esc(pr.name)}</h3><p class="lc-d">${esc(pr.desc)}</p>
+        <p class="lc-spec">${presetSpec(pr)}</p>
+        <div class="lc-mw">${presetMetrics(pr)}</div>
+        <button type="button" class="tbtn pri" data-preset="${pr.id}">Open and analyse</button></article>`).join('')}</div>`;
+  loadLibrary();
+}
+async function loadLibrary() {
+  const key = JSON.stringify(S.env);
+  if (LIB.envKey !== key) { LIB.results = {}; LIB.envKey = key; }
+  const seq = ++LIB.seq;
+  const env = {...S.env};
+  for (const f of ENV_FIELDS) if (env[f.key] != null && !isFinite(env[f.key])) env[f.key] = f.nullDefault ? null : f.value;
+  await Promise.all(PRESETS.filter(pr => !LIB.results[pr.id]).map(async pr => {
+    let d;
+    try {
+      const r = await fetch('/api/check', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({kind: pr.kind, ...pr.parts, env})});
+      d = await r.json();
+    } catch (e) { d = {ok:false, message:'Model server not responding'}; }
+    if (seq !== LIB.seq) return;
+    LIB.results[pr.id] = d;
+    const card = $(`#lc_${pr.id} .lc-mw`); if (card) card.innerHTML = presetMetrics(pr);
+  }));
+}
+function openPreset(id) {
+  const pr = PRESETS.find(p => p.id === id);
+  if (pr && !S.busy) loadIntoCheck(pr.kind, pr.parts);
+}
+
+/* ---------------- design report ---------------- */
+let repMeta = {project:'', author:'', org:'', notes:''};
+try { Object.assign(repMeta, JSON.parse(localStorage.getItem('dds-report') || '{}')); } catch (e) {}
+function openReportDialog() {
+  if (!S.cur) return;
+  let dlg = $('#repdlg');
+  if (!dlg) {
+    dlg = document.createElement('dialog'); dlg.id = 'repdlg'; dlg.className = 'help rep';
+    dlg.innerHTML = `<form id="repform" novalidate><div class="help-h"><h2>Design report</h2><button type="button" class="tbtn" data-close>Cancel</button></div>
+      <p class="rep-lead">A multi-page report of the current sheet: cover and summary, drawing, performance and parts, engineering analysis, trade study, and assumptions.</p>
+      <label class="rf">Project name<input id="rp_project" maxlength="80" autocomplete="off"></label>
+      <div class="rf2"><label class="rf">Prepared by<input id="rp_author" maxlength="60" autocomplete="name"></label>
+        <label class="rf">Organisation<input id="rp_org" maxlength="60" autocomplete="organization"></label></div>
+      <label class="rf">Notes for the cover page <span>optional</span><textarea id="rp_notes" rows="3" maxlength="600"></textarea></label>
+      <p class="rep-lead">Your browser's print window opens next. Choose <b>Save as PDF</b> as the printer.</p>
+      <button type="submit" class="run">Create PDF<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button></form>`;
+    dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+    $('#repform', dlg).addEventListener('submit', e => {
+      e.preventDefault();
+      repMeta = {project: $('#rp_project').value.trim(), author: $('#rp_author').value.trim(), org: $('#rp_org').value.trim(), notes: $('#rp_notes').value.trim()};
+      try { localStorage.setItem('dds-report', JSON.stringify({author: repMeta.author, org: repMeta.org})); } catch (err) {}
+      dlg.close(); buildReport();
+    });
+    document.body.appendChild(dlg);
+  }
+  $('#rp_project').value = S.cur.title; $('#rp_author').value = repMeta.author || 'Yafai'; $('#rp_org').value = repMeta.org || ''; $('#rp_notes').value = '';
+  dlg.showModal();
+}
+function reportClean(html) {
+  return html.replace(/ id="[^"]*"/g, '').replace(/ tabindex="[^"]*"/g, '').replace(/class="dwg plot"/g, 'class="dwg"')
+    .replace(/<marker /g, '<marker id="ahr" ').replace(/url\(#ah\)/g, 'url(#ahr)');
+}
+async function buildReport() {
+  const c = S.cur; if (!c) return;
+  toast('Preparing report…');
+  try { await Promise.all([S.anlP, S.swP]); } catch (e) {}
+  const m = c.metrics, p = c.parts, multi = c.kind === 'multirotor', cond = c.cond, a = S.anl;
+  const sheetHtml = reportClean($('#work .sheet')?.outerHTML || '');
+  const tablesHtml = reportClean($('#work .tables')?.outerHTML || '');
+  const anlHtml = $('#anlOut .anl-grid') ? reportClean($('#anlOut').innerHTML) : '';
+  let swHtml = '';
+  const so = $('#sweepOut');
+  if (so && $('#chart', so)) {
+    const cl = so.cloneNode(true);
+    cl.querySelectorAll('details, button, .tip').forEach(x => x.remove());
+    swHtml = reportClean(cl.innerHTML);
+  }
+  const craft = multi ? CRAFT(p.n_motors).toLowerCase() : 'fixed-wing aircraft';
+  const heavy = a ? a.masses.slice().sort((x, y) => y.kg - x.kg)[0] : null;
+  const sens = a && a.sensitivity.length ? SWEEP[a.sensitivity[0].param].label.toLowerCase() : null;
+  const summary = [
+    `This ${craft} carries ${fmt(p.payload_kg, 1)} kg and flies for ${fmt(m.flight_min, 1)} minutes ${multi ? 'in hover' : `at ${fmt(m.cruise_speed_ms, 1)} m/s cruise, a range of about ${fmt(m.range_km, 0)} km`}, at ${fmt(cond.alt_m, 0)} m and ${fmt(cond.temp_c, 0)} °C, landing with ${fmt(cond.reserve_pct, 0)}% battery left.`,
+    c.ok ? 'It passes every physics limit.' : 'It fails at least one physics limit. Section 2 shows which.',
+    c.mlProb != null ? `The ML model rates it ${Math.round(c.mlProb * 100)}% likely to be feasible.` : '',
+    heavy ? `The ${heavy.name.toLowerCase()} is the heaviest item at ${fmt(heavy.kg / m.auw_kg * 100, 0)}% of all-up weight${sens ? `, and flight time is most sensitive to ${sens}` : ''}.` : '',
+  ].filter(Boolean).join(' ');
+  const kpis = multi
+    ? [['Hover flight time', fmt(m.flight_min, 1), 'min'], ['All-up weight', fmt(m.auw_kg, 2), 'kg'], ['Thrust / weight', fmt(m.tw_ratio, 2), ''],
+       ['Hover throttle', fmt(m.hover_throttle_pct, 0), '%'], ['Battery', `${p.cells}S ${fmt(p.mah, 0)}`, 'mAh'], ['Payload', fmt(p.payload_kg, 1), 'kg']]
+    : [['Flight time', fmt(m.flight_min, 0), 'min'], ['Range', fmt(m.range_km, 0), 'km'], ['Cruise speed', fmt(m.cruise_speed_ms, 1), 'm/s'],
+       ['All-up weight', fmt(m.auw_kg, 2), 'kg'], ['Stall speed', fmt(m.stall_speed_ms, 1), 'm/s'], ['Battery', `${p.cells}S ${fmt(p.mah, 0)}`, 'mAh']];
+  const k = (S.info && S.info.constants) || {g: 9.81, eta_motor: 0.65, lipo_wh_per_kg: 140, cell_v: 3.7};
+  const asm = [
+    ['Air density', `${fmt(cond.rho, 3)} kg/m³`, `${fmt(cond.alt_m, 0)} m, ${fmt(cond.temp_c, 0)} °C${cond.standard_day ? ' (standard day)' : ''}. Standard-atmosphere pressure at altitude, ideal-gas density at the stated temperature.`],
+    ['Battery used per flight', `${fmt(100 - cond.reserve_pct, 0)}%`, `Flight time ends with ${fmt(cond.reserve_pct, 0)}% of capacity left as a landing reserve.`],
+    ['Gravity', `${k.g} m/s²`, ''],
+    ['Motor and ESC efficiency', `${fmt(k.eta_motor * 100, 0)}%`, 'Electrical to shaft power at hover and cruise load.'],
+    ['LiPo specific energy', `${fmt(k.lipo_wh_per_kg, 0)} Wh/kg`, 'Pack mass including wiring and case.'],
+    ['Cell voltage', `${fmt(k.cell_v, 1)} V`, 'Nominal, per cell.'],
+    ['Loaded motor speed', '80% of KV × voltage', 'Full-throttle speed under load.'],
+    ['Propeller data', 'UIUC-based model', 'Thrust and power coefficients from a model learned from the UIUC Propeller Database.'],
+    ...(multi ? [['Hover power margin', '× 1.2', 'Frame blockage, rotor interference and wind margin.'],
+                 ['Physics limits', 'Multirotor', 'Thrust/weight ≥ 1.8, hover throttle ≤ 75%, prop tip ≤ Mach 0.7, flight ≥ 2 min, battery ≤ 120C, ESC ≤ 120 A.']]
+              : [['Aerodynamics', 'CLmax 1.3, CD0 0.04, e 0.75', 'Cruise at 1.5 × stall speed. Propeller efficiency from momentum theory × 0.78.'],
+                 ['Physics limits', 'Fixed-wing', 'Static thrust/weight ≥ 0.4, pitch speed ≥ 1.3 × cruise, prop tip ≤ Mach 0.7, flight ≥ 3 min, battery ≤ 100C, ESC ≤ 100 A.']]),
+  ];
+  const asmHtml = `<table class="asm"><thead><tr><th>Assumption</th><th>Value</th><th>Notes</th></tr></thead><tbody>
+      ${asm.map(([x, v, n]) => `<tr><td>${x}</td><td class="mono">${v}</td><td>${n}</td></tr>`).join('')}</tbody></table>
+    <h3 class="rp-sub">Method</h3>
+    <p class="rp-p">New designs come from a random search. The ML models in drone_design_model.joblib (scikit-learn ${esc(S.info?.sklearn || '1.6.1')}) screen 80,000 candidate builds, the 40 best are rechecked with the physics simulation in drone_design.py, and only builds that pass are shown. Build checks run the same ML models and physics side by side.</p>
+    <p class="rp-p">The ML models have no altitude or temperature input, so only the physics results reflect the operating conditions. Weight breakdown and key figures use the physics simulation's own formulas. Sensitivity moves each part 10% (battery cells by one) with everything else fixed.</p>
+    <p class="rp-p">Results are estimates for comparing designs. Confirm thrust, current and endurance with bench and flight tests before relying on them.</p>`;
+  const secs = [['Drawing', sheetHtml], ['Performance and parts', tablesHtml]];
+  if (anlHtml) secs.push(['Engineering analysis', anlHtml]);
+  if (swHtml) secs.push([`Trade study: ${SWEEP[S.sweep.param].label.toLowerCase()}`, swHtml]);
+  secs.push(['Assumptions and method', asmHtml]);
+  const meta = [['Drawing no.', c.dwg], ['Sheet', c.sheetNo], ['Date', today], ['Prepared by', repMeta.author || '—'], ['Organisation', repMeta.org || '—'], ['Revision', 'A']];
+  const project = repMeta.project || c.title;
+  $('#report').innerHTML = `<section class="rp rp-cover">
+      <div class="rc-top"><span>Design report</span><span>Drone Design Studio · Designed by Yafai</span></div>
+      <h1>${esc(project)}</h1><p class="rc-sub">${esc(project === c.title ? `${condText(cond).split(',')[0]} · ${c.dwg}` : c.title)}</p>
+      <div class="rc-meta">${meta.map(([x, v]) => `<div><span class="k">${x}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
+      <h3 class="rp-sub">Summary</h3><p class="rc-sum">${esc(summary)}</p>
+      <div class="rc-kpis">${kpis.map(([x, v, u]) => `<div><span class="k">${x}</span><span class="v mono">${v}<small>${u ? ' ' + u : ''}</small></span></div>`).join('')}</div>
+      <h3 class="rp-sub">Operating conditions</h3><p class="rc-sum">${esc(condText(cond))}. Landing reserve ${fmt(cond.reserve_pct, 0)}%.</p>
+      ${repMeta.notes ? `<h3 class="rp-sub">Notes</h3><p class="rc-sum">${esc(repMeta.notes).replace(/\n/g, '<br>')}</p>` : ''}
+      <h3 class="rp-sub">Contents</h3><ol class="rc-toc">${secs.map(s => `<li>${esc(s[0])}</li>`).join('')}</ol>
+    </section>` + secs.map((s, i) => `<section class="rp"><header class="rp-h"><span class="rp-n">${i + 1}</span><h2>${esc(s[0])}</h2><span class="rp-ref">${esc(c.dwg)}</span></header>${s[1]}</section>`).join('');
+  let st = $('#repPage');
+  if (!st) { st = document.createElement('style'); st.id = 'repPage'; document.head.appendChild(st); }
+  const foot = `${project} · ${c.dwg}`.replace(/["\\\n]/g, '');
+  st.textContent = `@page{size:A4;margin:14mm 13mm 16mm;
+    @bottom-left{content:"${foot}";font:8pt "IBM Plex Mono",Consolas,monospace;color:#5a636e}
+    @bottom-right{content:"Page " counter(page) " of " counter(pages);font:8pt "IBM Plex Mono",Consolas,monospace;color:#5a636e}}`;
+  document.body.classList.add('reporting');
+  setTimeout(() => window.print(), 200);
+}
+document.addEventListener('click', e => {
+  $$('details.menu[open]').forEach(m => { if (!m.contains(e.target)) m.open = false; });
+});
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('printdraw');
+  if (!document.body.classList.contains('reporting')) return;
+  document.body.classList.remove('reporting');
+  const st = $('#repPage'); if (st) st.textContent = '';
+});
+
+/* ---------------- keyboard shortcuts ---------------- */
+const KEYS = [['Ctrl + Enter', 'Run the current form'], ['D / C', 'Design new / Check a build'], ['M / F', 'Multirotor / Fixed-wing'],
+  ['1 2 3', 'Switch design sheet'], ['T', 'Tweak this design'], ['S', 'Save build'], ['R', 'Design report (PDF)'], ['K', 'Compare saved builds'], ['L', 'Pre-built designs'], ['?', 'Show or hide shortcuts']];
+function toggleHelp(force) {
+  let dlg = $('#help');
+  if (!dlg) {
+    dlg = document.createElement('dialog'); dlg.id = 'help'; dlg.className = 'help';
+    dlg.innerHTML = `<div class="help-h"><h2>Keyboard shortcuts</h2><button type="button" class="tbtn" data-close>Close</button></div>
+      <dl>${KEYS.map(([k, v]) => `<div><dt>${k.split(' ').map(x => x === '+' || x === '/' ? `<span>${x}</span>` : `<kbd>${x}</kbd>`).join(' ')}</dt><dd>${v}</dd></div>`).join('')}</dl>
+      <p>Shortcuts are ignored while you type in a field, except Ctrl + Enter.</p>`;
+    dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+    document.body.appendChild(dlg);
+  }
+  const open = force ?? !dlg.open;
+  if (open && !dlg.open) dlg.showModal(); else if (!open && dlg.open) dlg.close();
+}
+document.addEventListener('keydown', e => {
+  const typing = e.target.closest && e.target.closest('input,textarea,select,[contenteditable="true"]');
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); return run(); }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === '?') { e.preventDefault(); return toggleHelp(); }
+  if ($('#help')?.open) return;
+  const R = S.result;
+  if (['1', '2', '3'].includes(k) && R && R.mode === 'design' && R.data.ok && S.view !== 'compare') {
+    const i = Number(k) - 1; if (i < R.data.options.length) { R.sel = i; renderWork(); } return;
+  }
+  if (S.busy) return;
+  if (k === 'd' || k === 'c') { const m = k === 'd' ? 'design' : 'check'; if (S.mode !== m) { S.mode = m; persist(); renderAside(); run(); } return; }
+  if (k === 'm' || k === 'f') { const kd = k === 'm' ? 'multirotor' : 'fixedwing'; if (S.kind !== kd) { S.kind = kd; persist(); renderAside(); run(); } return; }
+  if (k === 't' && S.cur && R?.mode === 'design' && S.view !== 'compare') return loadIntoCheck(S.cur.kind, S.cur.parts, S.cur.env);
+  if (k === 'r' && S.cur && S.view !== 'compare') return openReportDialog();
+  if (k === 's' && S.cur && S.view !== 'compare') return saveCurrent();
+  if (k === 'k' && S.saved.length) { S.view = 'compare'; return renderWork(); }
+  if (k === 'l') { S.view = 'library'; return renderWork(); }
+});
+
+/* ---------------- trade study ---------------- */
+const SWEEP = {
+  mah:{label:'Battery capacity', unit:'mAh', d:0, lim:[100, 50000], def:v => [Math.max(100, Math.round(v * .25 / 100) * 100), Math.min(50000, Math.round(v * 2.5 / 100) * 100)]},
+  cells:{label:'Battery cells', unit:'S', d:0, lim:[1, 14], def:v => [Math.max(1, v - 3), Math.min(14, v + 4)]},
+  D_in:{label:'Prop diameter', unit:'in', d:1, lim:[2, 30], def:v => [Math.max(2, v * .6), Math.min(30, v * 1.5)]},
+  P_in:{label:'Prop pitch', unit:'in', d:1, lim:[1, 30], def:v => [Math.max(1, v * .5), Math.min(30, v * 1.7)]},
+  kv:{label:'Motor KV', unit:'KV', d:0, lim:[50, 5000], def:v => [Math.max(50, Math.round(v * .5 / 10) * 10), Math.min(5000, Math.round(v * 1.6 / 10) * 10)]},
+  payload_kg:{label:'Payload', unit:'kg', d:1, lim:[0, 25], def:v => [0, Math.min(25, Math.max(2, v * 3 + 1))]},
+  span_m:{label:'Wingspan', unit:'m', d:2, lim:[0.3, 6], def:v => [Math.max(.3, v * .5), Math.min(6, v * 1.6)]},
+  aspect:{label:'Aspect ratio', unit:'', d:1, lim:[3, 20], def:v => [Math.max(3, v * .5), Math.min(20, v * 1.6)]},
+};
+const SWEEPABLE = {multirotor:['mah', 'cells', 'D_in', 'P_in', 'kv', 'payload_kg'], fixedwing:['mah', 'cells', 'D_in', 'P_in', 'kv', 'payload_kg', 'span_m', 'aspect']};
+function sweepSection(kind) {
+  if (!SWEEPABLE[kind].includes(S.sweep.param)) S.sweep.param = 'mah';
+  return `<section class="sweep" id="sweep"><h3 class="h3">Trade study <small>change one part, keep the rest fixed</small></h3>
+    <div class="sweep-ctl"><div class="chips" role="group" aria-label="Part to vary">${SWEEPABLE[kind].map(p =>
+      `<button type="button" data-sweep="${p}" aria-pressed="${p === S.sweep.param}">${SWEEP[p].label}</button>`).join('')}</div>
+      <form class="rng" id="rngForm" novalidate><label>From<input id="sw_lo" inputmode="decimal" autocomplete="off"></label>
+        <label>To<input id="sw_hi" inputmode="decimal" autocomplete="off"></label><span class="unit" id="sw_unit"></span>
+        <button class="tbtn" type="submit">Update</button></form></div>
+    <div id="sweepOut"><p class="summary">Running trade study…</p></div></section>`;
+}
+async function loadSweep() {
+  const c = S.cur; if (!c || !$('#sweep')) return;
+  const parts = c.parts, kind = c.kind, sp = S.sweep, def = SWEEP[sp.param];
+  const key = JSON.stringify(parts) + JSON.stringify(c.env) + sp.param;
+  if (sp.key !== key) {
+    let [a, b] = def.def(parts[sp.param]);
+    if (sp.param === 'payload_kg' && kind === 'fixedwing') b = Math.min(b, 10);
+    sp.lo = +a.toFixed(def.d); sp.hi = +b.toFixed(def.d); sp.key = key; sp.data = null;
+  }
+  $('#sw_lo').value = sp.lo; $('#sw_hi').value = sp.hi; $('#sw_unit').textContent = def.unit;
+  if (sp.data && sp.data.lo === sp.lo && sp.data.hi === sp.hi && sp.data.param === sp.param && sp.data.key === key) return drawSweep();
+  const seq = ++sp.seq, out = $('#sweepOut');
+  out.classList.add('loading');
+  try {
+    const r = await fetch('/api/sweep', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({kind, ...parts, param: sp.param, lo: sp.lo, hi: sp.hi, env: c.env})});
+    const d = await r.json();
+    if (seq !== sp.seq || !$('#sweepOut')) return;
+    if (!d.ok) { $('#sweepOut').innerHTML = `<p class="summary"><span class="err">${esc(d.message)}</span></p>`; return; }
+    sp.data = {...d, lo: sp.lo, hi: sp.hi, key};
+    drawSweep();
+  } catch (e) {
+    if (seq === sp.seq && $('#sweepOut')) $('#sweepOut').innerHTML = '<p class="summary"><span class="err">The trade study could not run because the model server is not responding.</span></p>';
+  }
+}
+function niceAxis(lo, hi, count = 4, integer = false) {
+  const span = Math.max(hi - lo, 1e-9), raw = span / count, mag = 10 ** Math.floor(Math.log10(raw)), f = raw / mag;
+  let step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * mag;
+  if (integer) step = Math.max(1, Math.round(step));
+  const ticks = [];
+  for (let t = Math.ceil(lo / step - 1e-9) * step; t <= hi + 1e-9; t += step) ticks.push(+t.toPrecision(12));
+  return {step, ticks};
+}
+function drawSweep() {
+  const sp = S.sweep, d = sp.data, c = S.cur, kind = c.kind, parts = c.parts, def = SWEEP[d.param];
+  const pts = d.points, n = pts.length, multi = kind === 'multirotor', twLim = multi ? 1.8 : 0.4;
+  const W = 760, ml = 54, mr = 104, t1 = 30, h1 = 200, gap = 44, h2 = 116, t2 = t1 + h1 + gap, xb = t2 + h2, H = xb + 46;
+  const x0 = pts[0].x, x1 = pts[n - 1].x;
+  const X = v => ml + (v - x0) / ((x1 - x0) || 1) * (W - ml - mr);
+  const fAx = niceAxis(0, Math.max(...pts.map(p => Math.max(p.phys_flight, p.ml_flight))) * 1.05 || 1);
+  const fTop = fAx.ticks[fAx.ticks.length - 1] < Math.max(...pts.map(p => Math.max(p.phys_flight, p.ml_flight))) ? fAx.ticks[fAx.ticks.length - 1] + fAx.step : fAx.ticks[fAx.ticks.length - 1];
+  const tMaxRaw = Math.max(twLim * 1.3, ...pts.map(p => Math.max(p.phys_tw, p.ml_tw)));
+  const tAx = niceAxis(0, tMaxRaw, 3);
+  const tTop = tAx.ticks[tAx.ticks.length - 1] < tMaxRaw ? tAx.ticks[tAx.ticks.length - 1] + tAx.step : tAx.ticks[tAx.ticks.length - 1];
+  if (fAx.ticks[fAx.ticks.length - 1] < fTop) fAx.ticks.push(fTop);
+  if (tAx.ticks[tAx.ticks.length - 1] < tTop) tAx.ticks.push(+tTop.toPrecision(12));
+  const Y1 = v => t1 + h1 - clamp(v, 0, fTop) / fTop * h1, Y2 = v => t2 + h2 - clamp(v, 0, tTop) / tTop * h2;
+  const integer = def.d === 0 && (d.param === 'cells' || x1 - x0 <= 20);
+  const xAx = niceAxis(x0, x1, 6, integer);
+  let g = '';
+  // failing bands
+  let runStart = null;
+  const bands = [];
+  pts.forEach((p, i) => {
+    if (!p.feasible && runStart === null) runStart = i;
+    if ((p.feasible || i === n - 1) && runStart !== null) { bands.push([runStart, p.feasible ? i - 1 : i]); runStart = null; }
+  });
+  const edge = i => i <= 0 ? X(x0) : i >= n ? X(x1) : X((pts[i - 1].x + pts[i].x) / 2);
+  let widest = null;
+  for (const [a, b] of bands) {
+    const xa = edge(a), xz = edge(b + 1);
+    g += `<rect class="band" x="${r1(xa)}" y="${t1}" width="${r1(Math.max(2, xz - xa))}" height="${xb - t1}"/>`;
+    if (!widest || xz - xa > widest[1] - widest[0]) widest = [xa, xz];
+  }
+  if (widest && widest[1] - widest[0] > 84) g += `<text class="bandt" x="${r1((widest[0] + widest[1]) / 2)}" y="${t1 + 14}" text-anchor="middle">FAILS LIMITS</text>`;
+  // grids and axes
+  for (const t of fAx.ticks) g += `<line class="${t === 0 ? 'base' : 'gl'}" x1="${ml}" x2="${W - mr}" y1="${r1(Y1(t))}" y2="${r1(Y1(t))}"/><text class="ax" x="${ml - 8}" y="${r1(Y1(t) + 3.5)}" text-anchor="end">${fmt(t, fAx.step < 1 ? 1 : 0)}</text>`;
+  for (const t of tAx.ticks) g += `<line class="${t === 0 ? 'base' : 'gl'}" x1="${ml}" x2="${W - mr}" y1="${r1(Y2(t))}" y2="${r1(Y2(t))}"/><text class="ax" x="${ml - 8}" y="${r1(Y2(t) + 3.5)}" text-anchor="end">${fmt(t, tAx.step < 1 ? 1 : 0)}</text>`;
+  for (const t of xAx.ticks) g += `<line class="gl" x1="${r1(X(t))}" x2="${r1(X(t))}" y1="${xb}" y2="${xb + 5}"/><text class="ax" x="${r1(X(t))}" y="${xb + 18}" text-anchor="middle">${fmt(t, xAx.step < 1 ? (xAx.step < .1 ? 2 : 1) : 0)}</text>`;
+  g += `<text class="axt" x="${ml}" y="${t1 - 12}">Flight time (min)</text><text class="axt" x="${ml}" y="${t2 - 12}">Thrust / weight</text>`;
+  g += `<text class="axt" x="${r1((ml + W - mr) / 2)}" y="${xb + 38}" text-anchor="middle">${def.label}${def.unit ? ` (${def.unit})` : ''}</text>`;
+  // T/W limit
+  g += `<line class="lim" x1="${ml}" x2="${W - mr}" y1="${r1(Y2(twLim))}" y2="${r1(Y2(twLim))}"/><text class="limt" x="${W - mr + 8}" y="${r1(Y2(twLim) + 3.5)}">min ${twLim}</text>`;
+  // current value
+  const cv = parts[d.param];
+  if (cv >= x0 && cv <= x1) g += `<line class="cur" x1="${r1(X(cv))}" x2="${r1(X(cv))}" y1="${t1}" y2="${xb}"/><text class="curt" x="${r1(X(cv) + 5)}" y="${t2 + 12}">Your build</text>`;
+  // lines
+  const path = (key, Y) => pts.map((p, i) => `${i ? 'L' : 'M'}${P(X(p.x), Y(p[key]))}`).join('');
+  for (const [Y, mlk, phk] of [[Y1, 'ml_flight', 'phys_flight'], [Y2, 'ml_tw', 'phys_tw']]) {
+    g += `<path class="s-ml" d="${path(mlk, Y)}"/><path class="ring" d="${path(phk, Y)}"/><path class="s-phys" d="${path(phk, Y)}"/>`;
+    if (n <= 16) g += pts.map(p => `<circle class="m-ml" cx="${r1(X(p.x))}" cy="${r1(Y(p[mlk]))}" r="4"/><circle class="m-phys" cx="${r1(X(p.x))}" cy="${r1(Y(p[phk]))}" r="4"/>`).join('');
+  }
+  // direct labels at the right end of the flight-time panel
+  const last = pts[n - 1];
+  let yp = Y1(last.phys_flight), ym = Y1(last.ml_flight);
+  if (Math.abs(yp - ym) < 15) { const mid = (yp + ym) / 2, s = yp <= ym ? -1 : 1; yp = mid + s * 7.5; ym = mid - s * 7.5; }
+  g += `<line class="s-phys" x1="${W - mr + 6}" x2="${W - mr + 18}" y1="${r1(yp)}" y2="${r1(yp)}"/><text class="lab" x="${W - mr + 23}" y="${r1(yp + 4)}">Physics</text>`;
+  g += `<line class="s-ml" x1="${W - mr + 6}" x2="${W - mr + 18}" y1="${r1(ym)}" y2="${r1(ym)}"/><text class="lab" x="${W - mr + 23}" y="${r1(ym + 4)}">ML model</text>`;
+  // hover layer
+  g += `<g id="xh" style="display:none"><line class="xh" id="xhl" y1="${t1}" y2="${xb}"/>
+    <circle class="m-ml" id="xd1" r="4.5"/><circle class="m-phys" id="xd2" r="4.5"/><circle class="m-ml" id="xd3" r="4.5"/><circle class="m-phys" id="xd4" r="4.5"/></g>
+    <rect class="hit" id="hit" x="${ml}" y="${t1}" width="${W - ml - mr}" height="${xb - t1}"/>`;
+  // summary
+  const ok = pts.filter(p => p.feasible);
+  const best = ok.length ? ok.reduce((a, b) => b.phys_flight > a.phys_flight ? b : a) : null;
+  const unit = def.unit ? ' ' + def.unit : '';
+  const now = c.metrics.flight_min;
+  const summary = best
+    ? `<span>Longest flight that passes all limits: <b>${fmt(best.phys_flight, 1)} min</b> at <b>${fmt(best.x, def.d)}${unit}</b>. Your build: <b>${fmt(now, 1)} min</b> at <b>${fmt(cv, def.d)}${unit}</b>.</span>
+       ${Math.abs(best.x - cv) > 1e-6 ? `<button type="button" class="tbtn pri" data-apply="${best.x}">Use ${fmt(best.x, def.d)}${unit}</button>` : ''}`
+    : `<span class="err">No value in this range passes the physics limits. Try a wider range or another part.</span>`;
+  const table = `<details class="tablev"><summary>Data table</summary><div class="scroll"><table><thead><tr><th class="n">${esc(def.label)}</th><th class="n">Physics flight</th><th class="n">ML flight</th><th class="n">Physics T/W</th><th class="n">All-up weight</th><th>Limits</th></tr></thead><tbody>
+    ${pts.map(p => `<tr><td class="n">${fmt(p.x, def.d)}${unit}</td><td class="n">${fmt(p.phys_flight, 1)} min</td><td class="n">${fmt(p.ml_flight, 1)} min</td><td class="n">${fmt(p.phys_tw, 2)}</td><td class="n">${fmt(p.auw, 2)} kg</td><td><span class="st ${p.feasible ? 'ok' : 'over'}">${p.feasible ? 'Pass' : 'Fail'}</span></td></tr>`).join('')}
+    </tbody></table></div></details>`;
+  $('#sweepOut').classList.remove('loading');
+  $('#sweepOut').innerHTML = `<p class="summary">${summary}</p>
+    <div class="legend"><span><i class="sw" style="background:var(--s-phys)"></i>Physics simulation</span><span><i class="sw" style="background:var(--s-ml)"></i>ML model</span>
+      <span><i class="sw band"></i>Fails physics limits</span><span><i class="sw cur"></i>Your build</span></div>
+    <div class="chart" id="chart"><svg viewBox="0 0 ${W} ${H}" tabindex="0" role="img" aria-label="Flight time and thrust-to-weight versus ${esc(def.label)}">${g}</svg><div class="tip" id="tip"></div></div>${table}`;
+  // interaction
+  const svg = $('#chart svg'), tip = $('#tip');
+  let idx = Math.max(0, pts.findIndex(p => p.x >= cv));
+  const show = i => {
+    idx = clamp(i, 0, n - 1);
+    const p = pts[idx], x = X(p.x);
+    $('#xh').style.display = '';
+    $('#xhl').setAttribute('x1', x); $('#xhl').setAttribute('x2', x);
+    [['#xd1', Y1(p.ml_flight)], ['#xd2', Y1(p.phys_flight)], ['#xd3', Y2(p.ml_tw)], ['#xd4', Y2(p.phys_tw)]].forEach(([id, y]) => { $(id).setAttribute('cx', x); $(id).setAttribute('cy', y); });
+    tip.innerHTML = `<div class="tt">${fmt(p.x, def.d)}${unit}</div>
+      <div class="r"><span><i style="background:var(--s-phys)"></i>Physics flight</span><b>${fmt(p.phys_flight, 1)} min</b></div>
+      <div class="r"><span><i style="background:var(--s-ml)"></i>ML flight</span><b>${fmt(p.ml_flight, 1)} min</b></div>
+      <div class="r"><span>Thrust / weight</span><b>${fmt(p.phys_tw, 2)}</b></div>
+      <div class="r"><span>All-up weight</span><b>${fmt(p.auw, 2)} kg</b></div>
+      <div class="r"><span>Physics limits</span><b>${p.feasible ? 'Pass' : 'Fail'}</b></div>`;
+    tip.style.display = 'block';
+    const box = svg.getBoundingClientRect(), px = x / W * box.width, tw = tip.offsetWidth;
+    tip.style.left = `${px + 14 + tw > box.width ? px - tw - 14 : px + 14}px`;
+    tip.style.top = `${t1 / H * box.height + 6}px`;
+  };
+  const hide = () => { $('#xh').style.display = 'none'; tip.style.display = 'none'; };
+  const nearest = e => { const box = svg.getBoundingClientRect(), vx = (e.clientX - box.left) / box.width * W;
+    let bi = 0; pts.forEach((p, i) => { if (Math.abs(X(p.x) - vx) < Math.abs(X(pts[bi].x) - vx)) bi = i; }); return bi; };
+  const hit = $('#hit');
+  hit.addEventListener('pointermove', e => show(nearest(e)));
+  hit.addEventListener('pointerdown', e => show(nearest(e)));
+  hit.addEventListener('pointerleave', hide);
+  svg.addEventListener('focus', () => show(idx));
+  svg.addEventListener('blur', hide);
+  svg.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); show(idx + (e.key === 'ArrowRight' ? 1 : -1)); }
+    if (e.key === 'Escape') hide();
+  });
+}
+function renderFail(R) {
+  const multi = R.kind === 'multirotor', req = R.req;
+  const parts = String(R.data.message || 'No design found.').split(/(?<=\.)\s+/);
+  const body = `<div class="nosol"><div class="stamp bad">${R.data.offline ? 'No connection' : 'No solution'}</div>
+    <p>${esc(parts[0])}</p>${parts.length > 1 ? `<p style="color:var(--ink2)">${esc(parts.slice(1).join(' '))}</p>` : ''}</div>`;
+  $('#work').innerHTML = sheet({svg: body,
+    notes: R.mode === 'design' && !R.data.offline ? ['Lower the payload or the minimum flight time.', `Allow a larger ${multi ? 'wheelbase' : 'wingspan'}, or remove the size limit.`, 'Under More constraints, allow more battery cells.'] : ['Restart the app, then run again.'],
+    tb: {title: R.mode === 'design' ? `${multi ? 'Multirotor' : 'Fixed-wing'}, ${fmt(req.payload_kg ?? 0, 1)} kg payload` : 'Build check', dwg: '—', scale: '—', sheet: '0 of 0', mass: '—'}});
+}
+
+/* linked highlighting between balloons and BOM rows */
+const work = $('#work');
+function hl(item, on) {
+  $$(`[data-item="${item}"]`, work).forEach(el => el.classList.toggle('hi', on));
+}
+['mouseover', 'focusin'].forEach(ev => work.addEventListener(ev, e => { const t = e.target.closest('[data-item]'); if (t) hl(t.dataset.item, true); }));
+['mouseout', 'focusout'].forEach(ev => work.addEventListener(ev, e => { const t = e.target.closest('[data-item]'); if (t) hl(t.dataset.item, false); }));
+work.addEventListener('click', e => {
+  const b = e.target.closest('button,[data-opt]');
+  if (!b) return;
+  if (b.dataset.opt != null && S.result) { S.result.sel = Number(b.dataset.opt); return renderWork(); }
+  if (b.dataset.panel) return showPanel(b.dataset.panel);
+  const menu = b.closest('details.menu'); if (menu) menu.open = false;
+  if (b.dataset.open) return openSaved(b.dataset.open);
+  if (b.dataset.preset) return openPreset(b.dataset.preset);
+  if (b.dataset.libtag) { LIB.tag = b.dataset.libtag; return renderLibrary(); }
+  if (b.dataset.sweep) {
+    S.sweep.param = b.dataset.sweep; S.sweep.key = null;
+    $$('[data-sweep]', work).forEach(x => x.setAttribute('aria-pressed', x === b));
+    return loadSweep();
+  }
+  if (b.dataset.apply != null && S.cur && !S.busy)
+    return loadIntoCheck(S.cur.kind, {...S.cur.parts, [S.sweep.param]: Number(b.dataset.apply)}, S.cur.env);
+  const act = b.dataset.act;
+  if (act === 'tweak' && S.cur && !S.busy) return loadIntoCheck(S.cur.kind, S.cur.parts, S.cur.env);
+  if (act === 'report' && S.cur) return openReportDialog();
+  if (act === 'save') return saveCurrent();
+  if (act === 'print') { document.body.classList.add('printdraw'); return window.print(); }
+  if (act === 'csv') return exportCsv();
+  if (act === 'back') { S.view = null; return S.result ? renderWork() : run(); }
+});
+work.addEventListener('submit', e => {
+  if (e.target.id !== 'rngForm') return;
+  e.preventDefault();
+  const sp = S.sweep, def = SWEEP[sp.param];
+  const lo = Number($('#sw_lo').value.replace(',', '.')), hi = Number($('#sw_hi').value.replace(',', '.'));
+  const [a, b] = def.lim;
+  if (!isFinite(lo) || !isFinite(hi) || lo < a || hi > b || hi <= lo) {
+    $('#sweepOut').innerHTML = `<p class="summary"><span class="err">Enter a range from ${fmt(a, def.d)} to ${fmt(b, def.d)}${def.unit ? ' ' + def.unit : ''}, with the end larger than the start.</span></p>`;
+    return;
+  }
+  sp.lo = lo; sp.hi = hi;
+  loadSweep();
+});
+
+/* theme */
+const root = document.documentElement;
+const effTheme = () => root.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+const syncTheme = () => $$('#theme button').forEach(b => b.setAttribute('aria-pressed', b.dataset.themeSet === effTheme()));
+try { const t = localStorage.getItem('dds-theme'); if (t) root.dataset.theme = t; } catch (e) {}
+$('#theme').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  root.dataset.theme = b.dataset.themeSet;
+  try { localStorage.setItem('dds-theme', b.dataset.themeSet); } catch (e) {}
+  syncTheme();
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncTheme);
+syncTheme();
+
+const infoP = fetch('/api/info').then(r => r.json()).then(i => {
+  S.info = i;
+  $('#meta').innerHTML = `<b>●</b> Model loaded · scikit-learn ${esc(i.sklearn)} · Python ${esc(i.python)}`;
+  return i;
+}).catch(() => { $('#meta').textContent = 'Model server not reachable'; return null; });
+
+$('#helpBtn').addEventListener('click', () => toggleHelp(true));
+const wantCompare = location.hash.includes('compare');
+infoP.then(() => browserSaved() ? {ok: true, items: lsSaved()} : fetch('/api/saved').then(r => r.json())).then(d => {
+  if (d.ok) { S.saved = d.items; renderSaved(); }
+  if (wantCompare) { if (S.saved.length) { S.view = 'compare'; renderWork(); } else run(); }
+}).catch(() => { if (wantCompare) run(); });
+
+renderAside();
+if (location.hash.includes('library')) { S.view = 'library'; renderWork(); }
+else if (!wantCompare) run();
+</script>
+</body>
+</html>
