@@ -443,6 +443,17 @@ details.tablev summary{font:600 13px var(--f-ui);letter-spacing:0;text-transform
 .ppanel .tables,.ppanel .anl,.ppanel .sweep{margin-top:0}
 .ppanel .anl>.h3{display:none}
 
+/* 3D view */
+.v3d-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px;margin-bottom:10px}
+.v3d-opts{display:flex;gap:16px;flex-wrap:wrap}
+.v3d-stage{position:relative;height:clamp(340px,58vh,620px);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:grab;
+  background:radial-gradient(ellipse at 50% 35%,var(--sheet) 0%,color-mix(in srgb,var(--sheet) 65%,var(--desk)) 100%)}
+.v3d-stage.grab{cursor:grabbing}
+.v3d-stage canvas{display:block;width:100%!important;height:100%!important}
+.v3d-msg{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:24px;text-align:center;color:var(--ink2);font-size:13px;max-width:none}
+.v3d-cap{margin:8px 0 0;font-size:12px;color:var(--ink2)}
+.rp-3d{display:block;width:100%;max-height:640px;object-fit:contain;border:1px solid var(--line)}
+
 /* credit */
 .by{font:12.5px var(--f-ui);color:var(--ink2);border-left:1px solid var(--line);padding-left:14px}
 .by b{color:var(--acc);font-weight:700}
@@ -641,6 +652,7 @@ if (saved.env && typeof saved.env === 'object') Object.assign(S.env, saved.env);
 for (const part of location.hash.slice(1).split(',')) {
   if (part === 'multirotor' || part === 'fixedwing') S.kind = part;
   if (part === 'design' || part === 'check') S.mode = part;
+  if (part === '3d') S.panel = 'v3d';
 }
 const formKey = () => `${S.kind}:${S.mode}`;
 function vals() {
@@ -1038,6 +1050,7 @@ function condNote(c) {
   return `Performance at ${condText(c)}. Flight time lands with ${fmt(c.reserve_pct, 0)}% battery left.`;
 }
 function renderWork() {
+  dispose3D();
   if (S.view === 'compare') return renderCompare();
   if (S.view === 'library') return renderLibrary();
   const R = S.result;
@@ -1047,7 +1060,7 @@ function renderWork() {
 }
 
 /* ---------------- result layout: header, summary, section tabs ---------------- */
-const PANELS = [['drawing', 'Drawing'], ['perf', 'Performance & parts'], ['anl', 'Analysis'], ['sweep', 'Trade study']];
+const PANELS = [['drawing', 'Drawing'], ['v3d', '3D view'], ['perf', 'Performance & parts'], ['anl', 'Analysis'], ['sweep', 'Trade study']];
 function resultHead(title, sub, design) {
   return `<div class="res-head"><div class="res-title"><h2>${title}</h2><p>${sub}</p></div>
     <div class="ractions">
@@ -1093,6 +1106,7 @@ function showPanel(k) {
   S.panel = k;
   $$('.ptabs [data-panel]', work).forEach(b => b.setAttribute('aria-selected', b.dataset.panel === k));
   $$('.ppanel', work).forEach(p => { p.hidden = p.id !== `pp_${k}`; });
+  if (k === 'v3d') start3D(); else if (V3.r) V3.r.pause();
 }
 const condShort = c => `${fmt(c.alt_m, 0)} m, ${fmt(c.temp_c, 0)} °C, land at ${fmt(c.reserve_pct, 0)}%`;
 
@@ -1122,9 +1136,10 @@ function renderDesign(R) {
       perf: `<div class="tables">
         <section class="tsec"><h3>Performance <small>physics simulation</small></h3>${perfTable(rows)}</section>
         <section class="tsec"><h3>Parts list <small>numbers match the drawing</small></h3>${bomTable(bom)}</section></div>`,
-      anl: analysisSection(), sweep: sweepSection(data.kind)}) +
+      v3d: view3dSection(), anl: analysisSection(), sweep: sweepSection(data.kind)}) +
     `<p class="foot-note">Designs come from a random search, so generating again can return different builds.</p>`;
   S.anlP = loadAnalysis(); S.swP = loadSweep();
+  if (S.panel === 'v3d') start3D();
 }
 
 const METRIC = {
@@ -1165,8 +1180,9 @@ function renderCheck(R) {
         <section class="tsec"><h3>Limits <small>physics simulation</small></h3>${perfTable(rows)}</section>
         <section class="tsec"><h3>ML model vs physics <small>difference, ±25% scale</small></h3>${dev}</section>
         <section class="tsec wide"><h3>Parts list <small>numbers match the drawing</small></h3>${bomTable(bom)}</section></div>`,
-      anl: analysisSection(), sweep: sweepSection(d.kind)});
+      v3d: view3dSection(), anl: analysisSection(), sweep: sweepSection(d.kind)});
   S.anlP = loadAnalysis(); S.swP = loadSweep();
+  if (S.panel === 'v3d') start3D();
 }
 
 /* ---------------- toolbar actions ---------------- */
@@ -1478,6 +1494,261 @@ function openPreset(id) {
   if (pr && !S.busy) loadIntoCheck(pr.kind, pr.parts);
 }
 
+/* ---------------- 3D view (three.js, loaded on first use) ---------------- */
+const V3 = {lib: null, r: null};
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function view3dSection() {
+  return `<div class="v3d">
+    <div class="v3d-bar">
+      <div class="chips" role="group" aria-label="Camera view">${[['iso', '3D'], ['top', 'Top'], ['front', 'Front'], ['side', 'Side']].map(([k, l], i) =>
+        `<button type="button" data-v3view="${k}" aria-pressed="${i === 0}">${l}</button>`).join('')}</div>
+      <div class="v3d-opts"><label class="nl"><input type="checkbox" id="v3spin"${reduceMotion ? '' : ' checked'}>Spin propellers</label>
+        <label class="nl"><input type="checkbox" id="v3rot">Auto-rotate</label></div></div>
+    <div class="v3d-stage" id="v3stage" tabindex="0" role="img" aria-label="3D model of the current design. Drag to rotate, scroll to zoom, double-click to reset, arrow keys to turn.">
+      <p class="v3d-msg" id="v3msg">Loading 3D view…</p></div>
+    <p class="v3d-cap" id="v3cap">Drag to rotate · scroll or pinch to zoom · double-click to reset</p></div>`;
+}
+function load3js() {
+  if (window.THREE) return Promise.resolve(window.THREE);
+  if (!V3.lib) V3.lib = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    s.onload = () => window.THREE ? res(window.THREE) : rej(new Error('three.js missing'));
+    s.onerror = () => { V3.lib = null; s.remove(); rej(new Error('three.js did not load')); };
+    document.head.appendChild(s);
+  });
+  return V3.lib;
+}
+async function start3D() {
+  const stage = $('#v3stage'); if (!stage || !S.cur) return;
+  if (V3.r && V3.r.stage === stage) return V3.r.play();
+  dispose3D();
+  let T;
+  try { T = await load3js(); } catch (e) {
+    const m = $('#v3msg'); if (m) m.textContent = 'The 3D view needs an internet connection the first time, to load its 3D library. Check your connection, then open this tab again.';
+    return;
+  }
+  if (!stage.isConnected || S.panel !== 'v3d' || (V3.r && V3.r.stage === stage)) return;
+  try { V3.r = build3D(T, stage, S.cur); V3.r.play(); }
+  catch (e) { const m = $('#v3msg'); if (m) m.textContent = 'This browser could not start the 3D view. WebGL may be turned off.'; }
+}
+function dispose3D() { if (V3.r) { V3.r.dispose(); V3.r = null; } }
+function rebuild3D() { if (!V3.r) return; dispose3D(); if (S.panel === 'v3d') start3D(); }
+document.addEventListener('visibilitychange', () => {
+  if (!V3.r) return;
+  if (document.hidden) V3.r.pause(); else if (S.panel === 'v3d') V3.r.play();
+});
+
+function build3D(T, stage, cur) {
+  const dark = effTheme() === 'dark';
+  const C = dark
+    ? {frame: 0x6b7787, plate: 0x56616f, metal: 0xc3ccd5, bell: 0xe8631f, prop: 0x232a33, batt: 0x4f8de8, skin: 0xd5dde6, trim: 0xe8631f, glass: 0x1b2430, grid1: 0x35587a, grid2: 0x1d3a55, hemi: 0x1a2a3a}
+    : {frame: 0x2d333b, plate: 0x3d454f, metal: 0xa3acb6, bell: 0xe2550e, prop: 0x1e2329, batt: 0x2b5fb3, skin: 0xc9d1da, trim: 0xe2550e, glass: 0x22303d, grid1: 0x8f99a4, grid2: 0xbcc4cc, hemi: 0xb6bec6};
+  const w0 = stage.clientWidth || 800, h0 = stage.clientHeight || 480;
+  const renderer = new T.WebGLRenderer({antialias: true, alpha: true, preserveDrawingBuffer: true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(w0, h0);
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+  renderer.outputEncoding = T.sRGBEncoding;
+  stage.innerHTML = ''; stage.appendChild(renderer.domElement);
+  const scene = new T.Scene();
+  const cam = new T.PerspectiveCamera(32, w0 / h0, 1, 400000);
+  scene.add(new T.HemisphereLight(0xffffff, C.hemi, dark ? 0.8 : 0.95));
+  const sun = new T.DirectionalLight(0xffffff, dark ? 0.85 : 0.75);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005;
+  scene.add(sun, sun.target);
+  const mats = [];
+  const M = (color, o = {}) => {
+    const m = new T.MeshStandardMaterial({color, roughness: o.r ?? 0.6, metalness: o.m ?? 0.1, transparent: o.op != null, opacity: o.op ?? 1,
+      side: o.ds ? T.DoubleSide : T.FrontSide, depthWrite: o.op == null});
+    mats.push(m); return m;
+  };
+  const add = (parent, geo, mat, x = 0, y = 0, z = 0, shadow = true) => {
+    const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = true; parent.add(m); return m;
+  };
+  let spin = $('#v3spin') ? $('#v3spin').checked : !reduceMotion, autoRot = !!($('#v3rot') && $('#v3rot').checked);
+  const DISC = .06, propMat = M(C.prop, {r: .35}), discMat = M(C.prop, {op: spin ? DISC : 0, ds: true});
+  const model = new T.Group(); scene.add(model);
+  const props = [];
+  const p = cur.parts;
+  let ext, cy, cap;
+
+  if (cur.kind === 'multirotor') {
+    const n = p.n_motors, wb = cur.metrics.wheelbase_mm || p.D_in * 25.4 / Math.sin(Math.PI / n) * 1.1;
+    const R = wb / 2, pr = p.D_in * 25.4 / 2;
+    const bw = Math.max(55, R * .42), bl = bw * 1.3, bh = Math.max(16, bw * .2);
+    const aw = Math.max(9, R * .06), ah = aw * .55, mr = Math.max(9, pr * .16), mh = mr * 1.1;
+    const big = R > 150, pay = p.payload_kg > 0 ? clamp(42 * Math.cbrt(p.payload_kg), 26, 170) : 0;
+    const legH = big ? Math.max(40, R * .26, pay * 1.6 + 12) : 6;
+    const y0 = legH, armY = y0 + bh * .55;
+    add(model, new T.BoxGeometry(bl, bh * .22, bw), M(C.plate), 0, y0 + bh * .11, 0);
+    add(model, new T.BoxGeometry(bl * .92, bh * .22, bw * .92), M(C.plate), 0, y0 + bh * .89, 0);
+    add(model, new T.BoxGeometry(bl * .6, bh * .6, bw * .6), M(C.frame, {r: .45}), 0, y0 + bh * .5, 0);
+    const bt = Math.max(14, bh * .9);
+    add(model, new T.BoxGeometry(bl * .82, bt, bw * .5), M(C.batt, {r: .45}), -bl * .04, y0 + bh + bt / 2, 0);
+    add(model, new T.BoxGeometry(bl * .07, bt * 1.08, bw * .54), M(C.frame), bl * .14, y0 + bh + bt / 2, 0);
+    if (big) {
+      add(model, new T.CylinderGeometry(2.5, 2.5, bw * .55, 8), M(C.metal, {m: .6, r: .35}), -bl * .38, y0 + bh + bw * .27, 0);
+      add(model, new T.CylinderGeometry(bw * .15, bw * .15, 7, 24), M(C.frame), -bl * .38, y0 + bh + bw * .55, 0);
+    }
+    for (let i = 0; i < n; i++) {
+      const a = (i + .5) * 2 * Math.PI / n - Math.PI / 2, x = -Math.sin(a) * R, z = Math.cos(a) * R, rot = Math.atan2(-z, x);
+      const along = d => [Math.cos(rot) * d, -Math.sin(rot) * d];
+      const [mx, mz] = along((R + bw * .3) / 2);
+      const arm = add(model, new T.BoxGeometry(R - bw * .3, ah, aw), M(C.frame, {r: .5}), mx, armY, mz); arm.rotation.y = rot;
+      const [ex, ez] = along(R * .56);
+      const esc = add(model, new T.BoxGeometry(R * .16, ah * .5, aw * 1.15), M(C.plate, {r: .7}), ex, armY + ah * .75, ez); esc.rotation.y = rot;
+      add(model, new T.CylinderGeometry(mr, mr, mh, 32), M(C.metal, {m: .7, r: .35}), x, armY + ah / 2 + mh / 2, z);
+      add(model, new T.CylinderGeometry(mr * .96, mr, mh * .28, 32), M(C.bell, {r: .45}), x, armY + ah / 2 + mh * .86, z);
+      const top = armY + ah / 2 + mh + 3;
+      const g = new T.Group(); g.position.set(x, top, z); g.rotation.y = i * 1.1; model.add(g);
+      for (const s of [1, -1]) { const bl1 = add(g, new T.BoxGeometry(pr * .92, 2.2, pr * .12), propMat, s * pr * .47, 0, 0); bl1.rotation.x = s * .22; }
+      add(g, new T.CylinderGeometry(mr * .32, mr * .32, 8, 16), M(C.metal, {m: .6, r: .35}));
+      const disc = add(model, new T.CircleGeometry(pr, 48), discMat, x, top, z, false); disc.rotation.x = -Math.PI / 2;
+      props.push({g, axis: 'y', dir: i % 2 ? 1 : -1});
+    }
+    if (big) for (const s of [1, -1]) {
+      const zz = s * bw * .62;
+      for (const xx of [bl * .3, -bl * .3]) add(model, new T.CylinderGeometry(3.5, 3.5, y0 - 5, 10), M(C.frame), xx, (y0 + 5) / 2, zz);
+      const sk = add(model, new T.CylinderGeometry(5, 5, bl * 1.25, 12), M(C.frame), 0, 5, zz); sk.rotation.z = Math.PI / 2;
+    }
+    if (pay) {
+      const px = bl * .12;
+      if (big) {
+        add(model, new T.CylinderGeometry(pay * .12, pay * .12, pay * .35, 12), M(C.frame), px, y0 - pay * .17, 0);
+        const cy0 = y0 - pay * .35 - pay * .38;
+        add(model, new T.BoxGeometry(pay * .95, pay * .75, pay * .8), M(C.frame, {r: .4}), px, cy0, 0);
+        const lens = add(model, new T.CylinderGeometry(pay * .24, pay * .24, pay * .18, 24), M(C.glass, {m: .3, r: .2}), px + pay * .56, cy0, 0); lens.rotation.z = Math.PI / 2;
+      } else {
+        const s = Math.min(pay, bw * .55), cy0 = y0 + bh + bt + s * .38;
+        add(model, new T.BoxGeometry(s * .8, s * .75, s), M(C.frame, {r: .4}), bl * .3, cy0, 0);
+        const lens = add(model, new T.CylinderGeometry(s * .24, s * .24, s * .14, 24), M(C.glass, {m: .3, r: .2}), bl * .3 + s * .46, cy0, 0); lens.rotation.z = Math.PI / 2;
+      }
+    }
+    ext = R + pr; cy = y0 + bh * .5;
+    cap = `${CRAFT(n)} · ${fmt(wb, 0)} mm wheelbase · ${fmt(p.D_in, 1)} in props`;
+  } else {
+    const b = p.span_m * 1000, AR = p.aspect, c = b / AR, cr = c * 1.25, ct = c * .75, L = clamp(b * .62, c * 5, b * 1.1);
+    const rf = Math.max(L * .042, 20), podH = p.payload_kg > 0 ? rf * .9 : 0, y0 = rf + 4 + podH;
+    const prof = [];
+    for (let k = 0; k <= 40; k++) {
+      const u = k / 40, r = u < .14 ? rf * Math.sqrt(u / .14) : u < .38 ? rf : rf * (1 - .72 * (u - .38) / .62);
+      prof.push(new T.Vector2(Math.max(r, .5), L * (.5 - u)));
+    }
+    const fus = add(model, new T.LatheGeometry(prof, 40), M(C.skin, {r: .45, ds: true}), 0, y0, 0); fus.rotation.z = -Math.PI / 2;
+    const sw = (cr - ct) * .45, xLE = L / 2 - L * .24, t = Math.max(5, cr * .1), wy = y0 + rf * .55;
+    const ws = new T.Shape();
+    ws.moveTo(xLE, 0); ws.lineTo(xLE - sw, b / 2); ws.lineTo(xLE - sw - ct, b / 2); ws.lineTo(xLE - cr, 0);
+    ws.lineTo(xLE - sw - ct, -b / 2); ws.lineTo(xLE - sw, -b / 2); ws.closePath();
+    const wing = add(model, new T.ExtrudeGeometry(ws, {depth: t, bevelEnabled: true, bevelThickness: t * .35, bevelSize: Math.min(t * .5, 6), bevelSegments: 3}),
+      M(C.skin, {r: .45}), 0, wy + t, 0);
+    wing.rotation.x = Math.PI / 2;
+    for (const s of [1, -1]) {
+      const f = .72, le = xLE - sw * f, ch = cr + (ct - cr) * f;
+      add(model, new T.BoxGeometry(ch * .26, t * .4, b / 2 * .44), M(C.trim, {r: .5}), le - ch + ch * .14, wy + t + t * .3, s * b / 2 * f);
+    }
+    const hs = Math.max(b * .3, 180), hc = Math.max(cr * .62, 50), tx = -L / 2 + hc + 8;
+    const ts = new T.Shape();
+    ts.moveTo(tx, 0); ts.lineTo(tx - hc * .3, hs / 2); ts.lineTo(tx - hc, hs / 2); ts.lineTo(tx - hc, -hs / 2); ts.lineTo(tx - hc * .3, -hs / 2); ts.closePath();
+    const tail = add(model, new T.ExtrudeGeometry(ts, {depth: 4, bevelEnabled: false}), M(C.skin, {r: .45}), 0, y0 + 6, 0); tail.rotation.x = Math.PI / 2;
+    const fh = hc * 1.25, fs = new T.Shape();
+    fs.moveTo(-L / 2, 0); fs.lineTo(-L / 2 + hc * 1.15, 0); fs.lineTo(-L / 2 + hc * .35, fh); fs.lineTo(-L / 2 + hc * .05, fh); fs.closePath();
+    add(model, new T.ExtrudeGeometry(fs, {depth: 4, bevelEnabled: false}), M(C.skin, {r: .45}), 0, y0, -2);
+    const pr = p.D_in * 25.4 / 2, g = new T.Group(); g.position.set(L / 2 + 12, y0, 0); model.add(g);
+    for (const s of [1, -1]) { const bl1 = add(g, new T.BoxGeometry(2.2, pr * .92, pr * .12), propMat, 0, s * pr * .47, 0); bl1.rotation.y = s * .22; }
+    const spinner = add(model, new T.ConeGeometry(rf * .55, rf * 1.1, 24), M(C.trim, {r: .4}), L / 2 + 12 + rf * .45, y0, 0); spinner.rotation.z = -Math.PI / 2;
+    const disc = add(model, new T.CircleGeometry(pr, 48), discMat, L / 2 + 10, y0, 0, false); disc.rotation.y = Math.PI / 2;
+    props.push({g, axis: 'x', dir: 1});
+    if (podH) add(model, new T.BoxGeometry(L * .12, podH, rf * 1.1), M(C.frame, {r: .45}), xLE - cr * .3, y0 - rf - podH / 2 + 2, 0);
+    ext = Math.max(b / 2, L / 2); cy = y0;
+    cap = `Fixed-wing · ${fmt(b, 0)} mm span · aspect ratio ${fmt(AR, 1)} · ${fmt(p.D_in, 1)} in prop`;
+  }
+
+  const step = [10, 20, 25, 50, 100, 200, 250, 500, 1000].find(s => ext * 2.4 / s <= 14) || 1000;
+  const size = Math.ceil(ext * 3 / step) * step;
+  const grid = new T.GridHelper(size, size / step, C.grid1, C.grid2);
+  grid.position.y = .2; grid.material.transparent = true; grid.material.opacity = .75; scene.add(grid);
+  const shadowMat = new T.ShadowMaterial({opacity: dark ? .35 : .16}); mats.push(shadowMat);
+  const ground = new T.Mesh(new T.PlaneGeometry(size * 2, size * 2), shadowMat);
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  sun.position.set(ext * 1.6, ext * 3, ext * 1.2);
+  const sc = sun.shadow.camera; sc.left = sc.bottom = -ext * 1.7; sc.right = sc.top = ext * 1.7; sc.near = 1; sc.far = ext * 8; sc.updateProjectionMatrix();
+  const capEl = $('#v3cap'); if (capEl) capEl.textContent = `${cap} · grid squares ${step} mm · drag to rotate, scroll to zoom, double-click to reset`;
+
+  const target = new T.Vector3(0, cy, 0);
+  const VIEWS = {iso: [.8, 1.05], top: [Math.PI, .02], front: [0, Math.PI / 2 - .06], side: [Math.PI / 2, Math.PI / 2 - .06]};
+  const fitDist = () => ext * (cur.kind === 'multirotor' ? .95 : 1.1) / Math.tan(16 * Math.PI / 180) / Math.min(1, cam.aspect * .9);
+  const lim = d => clamp(d, ext * 1.5, ext * 24);
+  const st = {th: .8, ph: 1.05, d: fitDist()}, goal = {...st};
+  const setView = k => {
+    const [th, ph] = VIEWS[k] || VIEWS.iso;
+    goal.th = th; goal.ph = ph; goal.d = fitDist();
+    while (goal.th - st.th > Math.PI) goal.th -= 2 * Math.PI;
+    while (st.th - goal.th > Math.PI) goal.th += 2 * Math.PI;
+  };
+  const el = renderer.domElement; el.style.touchAction = 'none';
+  const ptrs = new Map(); let pinch = 0;
+  el.addEventListener('pointerdown', e => {
+    el.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    if (ptrs.size === 2) { const [a, c2] = [...ptrs.values()]; pinch = Math.hypot(a.x - c2.x, a.y - c2.y); }
+    stage.classList.add('grab');
+  });
+  el.addEventListener('pointermove', e => {
+    const pt = ptrs.get(e.pointerId); if (!pt) return;
+    if (ptrs.size === 1) { goal.th += (e.clientX - pt.x) * .008; goal.ph = clamp(goal.ph - (e.clientY - pt.y) * .008, .02, Math.PI / 2 - .02); }
+    pt.x = e.clientX; pt.y = e.clientY;
+    if (ptrs.size === 2) { const [a, c2] = [...ptrs.values()], dd = Math.hypot(a.x - c2.x, a.y - c2.y); if (pinch && dd) goal.d = lim(goal.d * pinch / dd); pinch = dd; }
+  });
+  const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = 0; if (!ptrs.size) stage.classList.remove('grab'); };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  el.addEventListener('wheel', e => { e.preventDefault(); goal.d = lim(goal.d * Math.exp(e.deltaY * .0012)); }, {passive: false});
+  el.addEventListener('dblclick', () => setView('iso'));
+  const onKey = e => {
+    const k = e.key;
+    if (k === 'ArrowLeft') goal.th -= .15; else if (k === 'ArrowRight') goal.th += .15;
+    else if (k === 'ArrowUp') goal.ph = clamp(goal.ph - .12, .02, Math.PI / 2 - .02);
+    else if (k === 'ArrowDown') goal.ph = clamp(goal.ph + .12, .02, Math.PI / 2 - .02);
+    else if (k === '+' || k === '=') goal.d = lim(goal.d * .85); else if (k === '-') goal.d = lim(goal.d * 1.18);
+    else return;
+    e.preventDefault();
+  };
+  stage.addEventListener('keydown', onKey);
+  const ro = new ResizeObserver(() => {
+    const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return;
+    renderer.setSize(w, h); cam.aspect = w / h; cam.updateProjectionMatrix();
+  });
+  ro.observe(stage);
+  const place = () => {
+    cam.position.set(target.x + st.d * Math.sin(st.ph) * Math.cos(st.th), target.y + st.d * Math.cos(st.ph), target.z + st.d * Math.sin(st.ph) * Math.sin(st.th));
+    cam.lookAt(target);
+  };
+  let raf = 0, playing = false;
+  const frame = () => {
+    if (!playing) return;
+    raf = requestAnimationFrame(frame);
+    if (autoRot && !ptrs.size) goal.th += .004;
+    st.th += (goal.th - st.th) * .15; st.ph += (goal.ph - st.ph) * .15; st.d += (goal.d - st.d) * .15;
+    place();
+    if (spin) for (const q of props) q.g.rotation[q.axis] += q.dir * .45;
+    renderer.render(scene, cam);
+  };
+  return {
+    stage,
+    play() { if (playing) return; playing = true; frame(); },
+    pause() { playing = false; cancelAnimationFrame(raf); },
+    setView,
+    setSpin(v) { spin = v; discMat.opacity = v ? DISC : 0; },
+    setAuto(v) { autoRot = v; },
+    snapshot() { try { place(); renderer.render(scene, cam); return renderer.domElement.toDataURL('image/png'); } catch (e) { return null; } },
+    dispose() {
+      this.pause(); ro.disconnect(); stage.removeEventListener('keydown', onKey);
+      scene.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      mats.forEach(m => m.dispose()); grid.material.dispose();
+      renderer.dispose(); if (renderer.forceContextLoss) renderer.forceContextLoss(); el.remove();
+    },
+  };
+}
+
 /* ---------------- design report ---------------- */
 let repMeta = {project:'', author:'', org:'', notes:''};
 try { Object.assign(repMeta, JSON.parse(localStorage.getItem('dds-report') || '{}')); } catch (e) {}
@@ -1560,7 +1831,10 @@ async function buildReport() {
     <p class="rp-p">New designs come from a random search. The ML models in drone_design_model.joblib (scikit-learn ${esc(S.info?.sklearn || '1.6.1')}) screen 80,000 candidate builds, the 40 best are rechecked with the physics simulation in drone_design.py, and only builds that pass are shown. Build checks run the same ML models and physics side by side.</p>
     <p class="rp-p">The ML models have no altitude or temperature input, so only the physics results reflect the operating conditions. Weight breakdown and key figures use the physics simulation's own formulas. Sensitivity moves each part 10% (battery cells by one) with everything else fixed.</p>
     <p class="rp-p">Results are estimates for comparing designs. Confirm thrust, current and endurance with bench and flight tests before relying on them.</p>`;
-  const secs = [['Drawing', sheetHtml], ['Performance and parts', tablesHtml]];
+  const secs = [['Drawing', sheetHtml]];
+  const shot = V3.r ? V3.r.snapshot() : null;
+  if (shot) secs.push(['3D view', `<img class="rp-3d" src="${shot}" alt="3D view of the ${esc(c.title)}">`]);
+  secs.push(['Performance and parts', tablesHtml]);
   if (anlHtml) secs.push(['Engineering analysis', anlHtml]);
   if (swHtml) secs.push([`Trade study: ${SWEEP[S.sweep.param].label.toLowerCase()}`, swHtml]);
   secs.push(['Assumptions and method', asmHtml]);
@@ -1819,6 +2093,11 @@ work.addEventListener('click', e => {
   if (!b) return;
   if (b.dataset.opt != null && S.result) { S.result.sel = Number(b.dataset.opt); return renderWork(); }
   if (b.dataset.panel) return showPanel(b.dataset.panel);
+  if (b.dataset.v3view) {
+    $$('[data-v3view]', work).forEach(x => x.setAttribute('aria-pressed', x === b));
+    if (V3.r) V3.r.setView(b.dataset.v3view);
+    return;
+  }
   const menu = b.closest('details.menu'); if (menu) menu.open = false;
   if (b.dataset.open) return openSaved(b.dataset.open);
   if (b.dataset.preset) return openPreset(b.dataset.preset);
@@ -1837,6 +2116,11 @@ work.addEventListener('click', e => {
   if (act === 'print') { document.body.classList.add('printdraw'); return window.print(); }
   if (act === 'csv') return exportCsv();
   if (act === 'back') { S.view = null; return S.result ? renderWork() : run(); }
+});
+work.addEventListener('change', e => {
+  if (!V3.r) return;
+  if (e.target.id === 'v3spin') V3.r.setSpin(e.target.checked);
+  if (e.target.id === 'v3rot') V3.r.setAuto(e.target.checked);
 });
 work.addEventListener('submit', e => {
   if (e.target.id !== 'rngForm') return;
@@ -1861,9 +2145,9 @@ $('#theme').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   root.dataset.theme = b.dataset.themeSet;
   try { localStorage.setItem('dds-theme', b.dataset.themeSet); } catch (e) {}
-  syncTheme();
+  syncTheme(); rebuild3D();
 });
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncTheme);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { syncTheme(); rebuild3D(); });
 syncTheme();
 
 const infoP = fetch('/api/info').then(r => r.json()).then(i => {

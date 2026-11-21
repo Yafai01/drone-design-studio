@@ -11,6 +11,7 @@ Designed and developed by **Yafai**.
 - **Design new:** give a payload, minimum flight time and size limit. The ML model screens 80,000 random builds, the best 40 are rechecked with physics, and the top options come back with a parts list.
 - **Check a build:** enter motors, props, KV, battery and payload to get flight time, weight, thrust-to-weight and every physics limit, with the ML model and physics side by side.
 - **Drawing sheet:** to-scale plan view with dimensions, numbered parts and a title block.
+- **3D view:** an interactive 3D model built from the same dimensions (frame, motors, spinning props, battery, landing gear and camera, or fuselage, wing, tail and prop). Drag to rotate, scroll to zoom, switch between 3D, top, front and side views. Open it directly with `#3d` in the URL. Uses three.js, loaded from a CDN when the tab is first opened.
 - **Analysis:** weight breakdown, key engineering figures (hover efficiency, disk loading, lift-to-drag, energy per km) and a sensitivity chart.
 - **Trade study:** vary one part across a range and chart flight time and thrust-to-weight.
 - **Conditions:** altitude, air temperature and landing battery reserve feed the physics.
