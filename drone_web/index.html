@@ -6,43 +6,58 @@
 <title>Drone Design Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=B612:wght@400;700&family=IBM+Plex+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <style>
-/* Layout: requirements column on the left of a desk; the result is an engineering drawing sheet
-   (plan view, notes, title block) with performance and bill-of-materials tables beneath it. */
+/* Layout: control sub-assemblies in a panel on the left; a drafting viewport on the right holding the
+   drawing sheet, 3D view, tables and charts. Light = "Vellum Blueprint", dark = "Carbon Avionics".
+   Every UI, SVG-plot and 3D colour comes from these tokens (build3D reads the --m3-* ones). */
 :root{
-  --desk:#d8dde1; --sheet:#f8f9f7; --ink:#15191e; --ink2:#5a636e; --line:#c2c9cf; --rule:#e2e6e9;
-  --acc:#e2550e; --acc-ink:#ffffff; --acc-soft:rgba(226,85,14,.10);
-  --ok:#1d7849; --ok-soft:rgba(29,120,73,.11); --warn:#a26100; --warn-soft:rgba(162,97,0,.12);
-  --bad:#c0302a; --bad-soft:rgba(192,48,42,.10);
-  --s-phys:#2b5fb3; --s-ml:#e2550e;
-  --shadow:0 1px 0 rgba(21,25,30,.05),0 18px 36px -18px rgba(21,25,30,.35);
-  --f-disp:"Archivo","Bahnschrift","Arial Narrow",sans-serif;
-  --f-ui:"B612","Segoe UI",system-ui,sans-serif;
-  --f-mono:"IBM Plex Mono","Cascadia Mono",Consolas,monospace;
+  --canvas:#F5F4EF; --panel:#EBE9E1; --well:#E2DFD5;
+  --desk:var(--panel); --sheet:var(--canvas);
+  --ink:#18191B; --ink2:#64666B; --line:rgba(24,25,27,.14); --rule:rgba(24,25,27,.07); --dot:rgba(24,25,27,.16);
+  --acc:#0F62FE; --acc-ink:#FFFFFF; --acc-soft:rgba(15,98,254,.10);
+  --acc2:#D95D1E; --acc2-soft:rgba(217,93,30,.12);
+  --ok:#198038; --ok-soft:rgba(25,128,56,.12); --warn:#B28600; --warn-soft:rgba(178,134,0,.14);
+  --bad:#DA1E28; --bad-soft:rgba(218,30,40,.10);
+  --s-phys:#0F62FE; --s-ml:#D95D1E;
+  --shadow:0 1px 0 rgba(24,25,27,.05);
+  --m3-frame:#2A2D31; --m3-plate:#3A3E44; --m3-metal:#9DA2A8; --m3-bell:#D95D1E; --m3-prop:#1E2023; --m3-batt:#0F62FE;
+  --m3-skin:#D9D6CC; --m3-trim:#D95D1E; --m3-glass:#22262A; --m3-grid1:#AFACA2; --m3-grid2:#D3D0C6; --m3-hemi:#BDB9AE;
+  --r:3px;
+  --f-disp:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-ui:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono","Cascadia Mono",Consolas,monospace;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --desk:#07111a; --sheet:#0d2030; --ink:#dbe7f0; --ink2:#86a1b6; --line:#294660; --rule:#163049;
-  --acc:#ff7b39; --acc-ink:#1b0c03; --acc-soft:rgba(255,123,57,.14);
-  --ok:#52c48d; --ok-soft:rgba(82,196,141,.13); --warn:#f0b54a; --warn-soft:rgba(240,181,74,.13);
-  --bad:#ff6e62; --bad-soft:rgba(255,110,98,.13);
-  --s-phys:#4f8de8; --s-ml:#e8631f;
-  --shadow:0 1px 0 rgba(0,0,0,.3),0 18px 40px -16px rgba(0,0,0,.6);
+  --canvas:#111315; --panel:#181B1E; --well:#22262A;
+  --ink:#F0EFEA; --ink2:#8C919A; --line:rgba(240,239,234,.11); --rule:rgba(240,239,234,.06); --dot:rgba(240,239,234,.10);
+  --acc:#4589FF; --acc-ink:#0B0D0F; --acc-soft:rgba(69,137,255,.16);
+  --acc2:#FF7A3D; --acc2-soft:rgba(255,122,61,.15);
+  --ok:#3DDB76; --ok-soft:rgba(61,219,118,.13); --warn:#F1C21B; --warn-soft:rgba(241,194,27,.13);
+  --bad:#FA4D56; --bad-soft:rgba(250,77,86,.14);
+  --s-phys:#4589FF; --s-ml:#E8641F;
+  --shadow:0 1px 0 rgba(0,0,0,.35);
+  --m3-frame:#5A616B; --m3-plate:#474D55; --m3-metal:#C4C9CF; --m3-bell:#FF7A3D; --m3-prop:#2A2E33; --m3-batt:#4589FF;
+  --m3-skin:#DAD8D0; --m3-trim:#FF7A3D; --m3-glass:#1A1D20; --m3-grid1:#3A4047; --m3-grid2:#262A2F; --m3-hemi:#1C1F23;
   color-scheme:dark;
 }}
 :root[data-theme="dark"]{
-  --desk:#07111a; --sheet:#0d2030; --ink:#dbe7f0; --ink2:#86a1b6; --line:#294660; --rule:#163049;
-  --acc:#ff7b39; --acc-ink:#1b0c03; --acc-soft:rgba(255,123,57,.14);
-  --ok:#52c48d; --ok-soft:rgba(82,196,141,.13); --warn:#f0b54a; --warn-soft:rgba(240,181,74,.13);
-  --bad:#ff6e62; --bad-soft:rgba(255,110,98,.13);
-  --s-phys:#4f8de8; --s-ml:#e8631f;
-  --shadow:0 1px 0 rgba(0,0,0,.3),0 18px 40px -16px rgba(0,0,0,.6);
+  --canvas:#111315; --panel:#181B1E; --well:#22262A;
+  --ink:#F0EFEA; --ink2:#8C919A; --line:rgba(240,239,234,.11); --rule:rgba(240,239,234,.06); --dot:rgba(240,239,234,.10);
+  --acc:#4589FF; --acc-ink:#0B0D0F; --acc-soft:rgba(69,137,255,.16);
+  --acc2:#FF7A3D; --acc2-soft:rgba(255,122,61,.15);
+  --ok:#3DDB76; --ok-soft:rgba(61,219,118,.13); --warn:#F1C21B; --warn-soft:rgba(241,194,27,.13);
+  --bad:#FA4D56; --bad-soft:rgba(250,77,86,.14);
+  --s-phys:#4589FF; --s-ml:#E8641F;
+  --shadow:0 1px 0 rgba(0,0,0,.35);
+  --m3-frame:#5A616B; --m3-plate:#474D55; --m3-metal:#C4C9CF; --m3-bell:#FF7A3D; --m3-prop:#2A2E33; --m3-batt:#4589FF;
+  --m3-skin:#DAD8D0; --m3-trim:#FF7A3D; --m3-glass:#1A1D20; --m3-grid1:#3A4047; --m3-grid2:#262A2F; --m3-hemi:#1C1F23;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--desk);color:var(--ink);font:13.5px/1.5 var(--f-ui);-webkit-font-smoothing:antialiased;min-height:100vh}
+body{background:var(--desk);color:var(--ink);font:13.5px/1.5 var(--f-ui);-webkit-font-smoothing:antialiased;min-height:100vh;font-variant-numeric:tabular-nums}
 button,input{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
@@ -362,7 +377,6 @@ kbd{display:inline-block;min-width:22px;text-align:center;padding:1px 6px;border
 .kbtn{display:inline-flex;align-items:center;gap:6px}
 
 /* ---- refinement layer: sentence-case labels, softer controls (overrides earlier rules) ---- */
-:root{--r:6px}
 .spec{gap:24px}
 .cap{font:700 13px var(--f-ui);letter-spacing:0;text-transform:none;color:var(--ink)}
 details.adv summary{font:600 13px var(--f-ui);letter-spacing:0;text-transform:none;color:var(--ink)}
@@ -554,18 +568,251 @@ table.asm td:nth-child(2){width:22%;white-space:nowrap}
   .plot .ln{animation:none;stroke-dasharray:none}
   .plot .dimg,.plot .bal,.plot .hid,.plot .ph,.plot .ctr{animation:none}
 }
+
+/* =====================================================================
+   Instrument layer: machined corners, hairlines, avionics accents.
+   Last in the cascade so it settles every earlier rule.
+   ===================================================================== */
+input,button,select,textarea{border-radius:0}
+.mono,.kv,.nbox input,td.n,.fbot,.opts .os,.rng input,.st-time,.lc-spec,.v3d-cap,.meta,#sysText{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+:focus-visible{outline:1px solid var(--acc);outline-offset:2px}
+
+/* header */
+.top{background:var(--panel);border-bottom:1px solid var(--line)}
+.top-in{padding-block:10px}
+.name{font:600 16px var(--f-ui);letter-spacing:-.005em;font-stretch:100%}
+.name svg{color:var(--acc)}
+.rev{font:500 10.5px var(--f-mono);letter-spacing:.08em;color:var(--ink2);border:1px solid var(--line);padding:1px 6px;border-radius:2px}
+
+/* toggles and buttons */
+.tog{border:1px solid var(--line);border-radius:var(--r);background:var(--well);overflow:hidden}
+.tog button{color:var(--ink2);font:500 12.5px var(--f-ui)}
+.tog button+button{border-left:1px solid var(--line)}
+.tog button[aria-pressed="true"]{background:var(--ink);color:var(--canvas)}
+.tbtn{border:1px solid var(--line);border-radius:var(--r);background:transparent;font:500 12.5px var(--f-ui);transition:background .12s,border-color .12s}
+.tbtn:hover{background:var(--well);border-color:color-mix(in srgb,var(--ink) 30%,transparent)}
+.tbtn.pri,.menu[open] summary.tbtn{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.tbtn.pri:hover{background:color-mix(in srgb,var(--acc) 86%,var(--ink));border-color:transparent;color:var(--acc-ink)}
+.tbtn:active,.run:active,.tog button:active,.chips button:active{transform:translateY(1px)}
+.run{background:var(--acc);color:var(--acc-ink);border-radius:var(--r);font:600 14px var(--f-ui);height:44px;transition:background .12s}
+.run:hover{filter:none;background:color-mix(in srgb,var(--acc) 86%,var(--ink))}
+.chips button{border-radius:2px;border-color:var(--line);font:500 12px var(--f-ui)}
+.chips button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--canvas)}
+kbd{background:var(--well);border-color:var(--line);border-radius:2px;font-family:var(--f-mono)}
+
+/* layout: panel sidebar + drafting viewport */
+.desk{gap:20px;padding-block:18px 18px}
+.spec{position:sticky;top:16px;max-height:calc(100vh - 118px);overflow:auto;gap:10px;padding-right:4px;scrollbar-width:thin}
+@media (max-width:1000px){.spec{position:static;max-height:none;overflow:visible}}
+.work{border:1px solid var(--line);border-radius:2px;padding:26px 28px 30px;min-height:calc(100vh - 140px);
+  background:
+    linear-gradient(var(--ink2),var(--ink2)) left 8px top 8px/14px 1px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) left 8px top 8px/1px 14px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) right 8px top 8px/14px 1px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) right 8px top 8px/1px 14px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) left 8px bottom 8px/14px 1px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) left 8px bottom 8px/1px 14px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) right 8px bottom 8px/14px 1px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) right 8px bottom 8px/1px 14px no-repeat,
+    radial-gradient(circle at 1px 1px,var(--dot) 1px,transparent 1.4px) 0 0/16px 16px,
+    var(--canvas)}
+@media (max-width:640px){.work{padding:18px 14px 20px}}
+
+/* control sub-assemblies */
+.asm{border:1px solid var(--line);border-radius:var(--r);background:var(--canvas);transition:box-shadow .3s}
+.asm.flash{box-shadow:inset 0 0 0 1px var(--acc)}
+.asm-h{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line);font:600 10.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase}
+.asm-no{color:var(--acc)}
+.asm-t{flex:1;color:var(--ink)}
+.asm-reset{width:22px;height:22px;display:grid;place-items:center;border:1px solid transparent;border-radius:2px;background:none;color:var(--ink2);cursor:pointer;font:14px/1 var(--f-ui);padding:0}
+.asm-reset:hover{border-color:var(--line);color:var(--ink);background:var(--well)}
+.asm-reset:active{transform:rotate(-90deg);transition:transform .2s}
+.asm-b{padding:12px 10px 14px;display:grid;gap:14px}
+.asm-b .hint{margin:0}
+#form{gap:10px}
+.runbar{position:sticky;bottom:0;z-index:2;background:var(--panel);padding:8px 0 4px;display:grid;gap:8px;box-shadow:0 -8px 8px -8px var(--panel)}
+@media (max-width:1000px){.runbar{position:static}}
+.saved .empty{font-size:12px}
+.tbtn.kb{justify-self:start;gap:8px;color:var(--ink2)}
+
+/* fields: wells, labels, machined sliders */
+.ftop label,.ftop .lab,.fld>.lab{font:500 12.5px var(--f-ui);color:var(--ink)}
+.fld>.lab{display:block;margin-bottom:5px}
+.fhelp{font-size:11.5px}
+.nbox{background:var(--well);border:1px solid var(--line);border-radius:2px;padding:3px 7px;width:118px;align-items:center}
+.nbox input{font:600 13px var(--f-mono)}
+.nbox i{font:10.5px var(--f-mono);color:var(--ink2);min-width:auto}
+.nbox:focus-within{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.fld.err .nbox{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad)}
+.fbot{font-size:10px;color:var(--ink2)}
+input[type=range]{height:18px;background:
+  linear-gradient(var(--acc),var(--acc)) 0 8px/var(--p,50%) 2px no-repeat,
+  linear-gradient(var(--well),var(--well)) 0 8px/100% 2px no-repeat,
+  repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 10%) 0 100%/calc(100% + 1px) 4px no-repeat}
+input[type=range]::-webkit-slider-thumb{width:8px;height:16px;border:1px solid var(--ink);border-radius:1px;
+  background:linear-gradient(var(--acc),var(--acc)) center 3px/2px 10px no-repeat,var(--canvas);
+  clip-path:polygon(0 0,100% 0,100% 78%,50% 100%,0 78%);transition:transform .1s}
+input[type=range]::-moz-range-thumb{width:7px;height:14px;border:1px solid var(--ink);border-radius:1px;
+  background:linear-gradient(var(--acc),var(--acc)) center 3px/2px 9px no-repeat,var(--canvas)}
+input[type=range]:active::-webkit-slider-thumb{transform:scaleY(1.1)}
+.nl input{accent-color:var(--acc)}
+
+/* plotting indicator */
+.status{gap:10px;font:500 10.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);margin:0 0 14px;padding:7px 10px;
+  border:1px solid var(--line);border-radius:2px;background:var(--canvas)}
+.st-tag{color:var(--warn);font-weight:700}
+#statusText{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.segs{display:flex;gap:2px;flex:1;min-width:60px;max-width:240px;margin-left:auto}
+.segs i{flex:1;height:8px;background:var(--well);animation:seg 1.3s linear infinite}
+.segs i:nth-child(2){animation-delay:.08s}.segs i:nth-child(3){animation-delay:.16s}.segs i:nth-child(4){animation-delay:.24s}
+.segs i:nth-child(5){animation-delay:.32s}.segs i:nth-child(6){animation-delay:.4s}.segs i:nth-child(7){animation-delay:.48s}
+.segs i:nth-child(8){animation-delay:.56s}.segs i:nth-child(9){animation-delay:.64s}.segs i:nth-child(10){animation-delay:.72s}
+.segs i:nth-child(11){animation-delay:.8s}.segs i:nth-child(12){animation-delay:.88s}.segs i:nth-child(13){animation-delay:.96s}
+.segs i:nth-child(14){animation-delay:1.04s}.segs i:nth-child(15){animation-delay:1.12s}.segs i:nth-child(16){animation-delay:1.2s}
+@keyframes seg{0%,100%{background:var(--well)}6%{background:var(--acc)}24%{background:var(--acc-soft)}}
+.st-time{min-width:52px;text-align:right;color:var(--ink)}
+
+/* footer telemetry bar */
+.credit{position:sticky;bottom:0;z-index:15;background:var(--panel);border-top:1px solid var(--line)}
+.credit-in{padding-block:7px calc(7px + env(safe-area-inset-bottom,0px));align-items:center;font-size:12px}
+.telemetry{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.telemetry .meta{font-size:10.5px;color:var(--ink2);letter-spacing:.04em}
+.led-wrap{display:inline-flex;align-items:center;gap:7px;font:600 10.5px var(--f-mono);letter-spacing:.1em;color:var(--ink)}
+.led{width:6px;height:6px;border-radius:50%;display:inline-block;background:var(--ink2);color:var(--ink2);animation:pulse 2.4s ease-out infinite}
+.led.ok{background:var(--ok);color:var(--ok)}
+.led.busy{background:var(--warn);color:var(--warn);animation-duration:.8s}
+.led.bad{background:var(--bad);color:var(--bad);animation-duration:1.2s}
+.led.wait{animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,currentColor 60%,transparent)}70%,100%{box-shadow:0 0 0 5px transparent}}
+
+/* results */
+.res-title h2{font:600 22px/1.2 var(--f-ui);letter-spacing:-.01em}
+.opts button,.sumbar,.lc,.anl-grid,.chart,.cmpwrap,.sv,.menu-pop,.sheet,.v3d-stage,.help,.msg{border-radius:var(--r)}
+.opts button{background:var(--canvas);border-color:var(--line)}
+.opts button[aria-selected="true"]{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.sumbar,.anl-grid,.chart,.lc,.cmpwrap,.sv{background:var(--canvas);border-color:var(--line)}
+.kpi{border-right-color:var(--line)}
+.kv{font-weight:600;letter-spacing:-.02em}
+.verdict{border-left-color:var(--line)}
+.verdict .vi{border-radius:2px}
+.ptabs{border-bottom-color:var(--line)}
+.ptabs button{font:500 13px var(--f-ui)}
+.ptabs button[aria-selected="true"]{border-bottom-color:var(--acc)}
+.menu-pop{background:var(--canvas);border-color:var(--line);box-shadow:0 8px 24px -12px rgba(0,0,0,.35)}
+.menu-pop button:hover,.menu-pop button:focus-visible{background:var(--well)}
+.sheet{border:1px solid var(--line);box-shadow:none}
+.inner{border-color:var(--ink)}
+.lib .tag{border-radius:2px;background:var(--acc2-soft);color:var(--acc2)}
+.lc-draw{border-radius:2px;border-color:var(--line)}
+th{border-top-color:var(--ink);border-bottom-color:var(--line)}
+td{border-bottom-color:var(--line)}
+.gauge,.wbar{background:var(--well)}
+.gauge b{background:var(--acc2)}
+.st{border-radius:2px}
+.dwg .sb-k{fill:var(--ink)} .dwg .sb-w{fill:var(--sheet)} .dwg .sb-o{fill:none;stroke:var(--ink);stroke-width:.8}
+.chart .lim{stroke:var(--acc2)} .chart .limt{fill:var(--acc2)}
+.v3d-stage{background:radial-gradient(ellipse at 50% 35%,var(--canvas) 0%,var(--panel) 100%);border-color:var(--line)}
+.toast{border-radius:var(--r);font-family:var(--f-ui)}
+@media (prefers-reduced-motion:reduce){.segs i,.led{animation:none}.segs i:nth-child(odd){background:var(--acc-soft)}}
+@media print{.credit,.status{display:none!important}.work{background:none;border:0;padding:0;min-height:0}}
+
+/* start-up intro */
+.intro{position:fixed;inset:0;z-index:100;display:grid;place-items:center;cursor:pointer;color:var(--ink);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:
+    linear-gradient(var(--ink2),var(--ink2)) left 18px top 18px/18px 1px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) left 18px top 18px/1px 18px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) right 18px top 18px/18px 1px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) right 18px top 18px/1px 18px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) left 18px bottom 18px/18px 1px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) left 18px bottom 18px/1px 18px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) right 18px bottom 18px/18px 1px no-repeat,
+    linear-gradient(var(--ink2),var(--ink2)) right 18px bottom 18px/1px 18px no-repeat,
+    radial-gradient(circle at 1px 1px,var(--dot) 1px,transparent 1.4px) 0 0/16px 16px,
+    var(--canvas);
+  transition:opacity .45s ease,transform .45s ease}
+.intro.out{opacity:0;transform:scale(1.015);pointer-events:none}
+.intro-in{display:grid;justify-items:center;gap:10px;width:min(400px,100%)}
+.intro-dwg{width:168px;height:168px;overflow:visible;margin-bottom:6px}
+.intro-dwg .ph{fill:none;stroke:var(--ink2);stroke-width:.8;stroke-dasharray:7 3 1.5 3;opacity:0;animation:introFade .6s .75s forwards}
+.intro-dwg .pl{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;animation:introPlot .8s cubic-bezier(.3,.1,.2,1) forwards}
+.intro-dwg .body{fill:var(--canvas);animation-delay:.25s}
+.intro-dwg .acc{stroke:var(--acc);animation-delay:.55s}
+.intro-dwg circle.pl{fill:var(--canvas);animation-delay:.45s}
+.intro-dwg .bl{fill:none;stroke:var(--acc);stroke-width:2.4;stroke-linecap:round;opacity:0;animation:introFade .3s .95s forwards}
+.intro-dwg .rot{animation:introSpin 2.6s 1s cubic-bezier(.55,0,.9,.6) forwards}
+.intro-dwg .rot.ccw{animation-name:introSpinCcw}
+.intro-title{display:flex;align-items:center;gap:10px;opacity:0;animation:introUp .5s .6s forwards}
+.intro-title h2{margin:0;font:600 26px var(--f-ui);letter-spacing:-.015em}
+.intro-sub{margin:0;font:500 10.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);opacity:0;animation:introUp .5s .75s forwards}
+.intro-log{list-style:none;margin:14px 0 0;padding:0;width:100%;display:grid;gap:4px;font:11.5px var(--f-mono);border-top:1px solid var(--line);padding-top:12px}
+.intro-log li{display:flex;justify-content:space-between;gap:12px;opacity:0;animation:introFade .3s forwards}
+.intro-log li:nth-child(1){animation-delay:.9s}.intro-log li:nth-child(2){animation-delay:1.15s}.intro-log li:nth-child(3){animation-delay:1.4s}
+.intro-log span{color:var(--ink2);flex:1;display:flex;align-items:baseline;gap:8px;min-width:0}
+.intro-log span::after{content:"";flex:1;border-bottom:1px dotted var(--line);transform:translateY(-3px)}
+.intro-log b{font-weight:600;color:var(--ink2)}
+.intro-log b.ok{color:var(--ok)} .intro-log b.bad{color:var(--bad)}
+.intro-bar{width:100%;height:2px;background:var(--well);margin-top:6px;overflow:hidden}
+.intro-bar i{display:block;height:100%;width:0;background:var(--acc);animation:introFill 1.9s cubic-bezier(.2,.6,.3,1) forwards}
+.intro.done .intro-bar i{width:100%;animation:none;transition:width .25s}
+.intro-credit{position:absolute;bottom:40px;left:0;right:0;margin:0;text-align:center;font-size:12.5px;color:var(--ink2);opacity:0;animation:introFade .6s 1.1s forwards}
+.intro-credit b{color:var(--ink)}
+.intro-skip{position:absolute;bottom:18px;left:0;right:0;margin:0;text-align:center;font:10px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);opacity:.6}
+@keyframes introPlot{to{stroke-dashoffset:0}}
+@keyframes introFade{to{opacity:1}}
+@keyframes introUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes introFill{to{width:88%}}
+@keyframes introSpin{to{transform:rotate(2520deg)}}
+@keyframes introSpinCcw{to{transform:rotate(-2520deg)}}
+@media print{.intro{display:none!important}}
 </style>
 </head>
 <body>
+<div id="intro" class="intro" role="status" aria-label="Drone Design Studio is starting">
+  <div class="intro-in">
+    <svg class="intro-dwg" viewBox="-100 -100 200 200" aria-hidden="true">
+      <path class="ph" d="M-96 0H96M0 -96V96"/>
+      <circle class="ph" cx="-50" cy="-50" r="36"/><circle class="ph" cx="50" cy="-50" r="36"/>
+      <circle class="ph" cx="-50" cy="50" r="36"/><circle class="ph" cx="50" cy="50" r="36"/>
+      <path class="pl" pathLength="1" d="M0 0L-50 -50"/><path class="pl" pathLength="1" d="M0 0L50 -50"/>
+      <path class="pl" pathLength="1" d="M0 0L-50 50"/><path class="pl" pathLength="1" d="M0 0L50 50"/>
+      <rect class="pl body" pathLength="1" x="-17" y="-22" width="34" height="44" rx="4"/>
+      <path class="pl acc" pathLength="1" d="M0 -13l-6 9h12z"/>
+      <circle class="pl" pathLength="1" cx="-50" cy="-50" r="7"/><circle class="pl" pathLength="1" cx="50" cy="-50" r="7"/>
+      <circle class="pl" pathLength="1" cx="-50" cy="50" r="7"/><circle class="pl" pathLength="1" cx="50" cy="50" r="7"/>
+      <g transform="translate(-50 -50)"><g class="rot"><path class="bl" d="M-32 0H32"/></g></g>
+      <g transform="translate(50 -50)"><g class="rot ccw"><path class="bl" d="M-32 0H32"/></g></g>
+      <g transform="translate(-50 50)"><g class="rot ccw"><path class="bl" d="M-32 0H32"/></g></g>
+      <g transform="translate(50 50)"><g class="rot"><path class="bl" d="M-32 0H32"/></g></g>
+    </svg>
+    <div class="intro-title"><h2>Drone Design Studio</h2><span class="rev">REV 1.0</span></div>
+    <p class="intro-sub">ML-screened · physics-checked drone design</p>
+    <ol class="intro-log">
+      <li data-k="sheet"><span>Drafting sheet</span><b class="ok">OK</b></li>
+      <li data-k="model"><span>ML model</span><b>…</b></li>
+      <li data-k="solver"><span>Physics solver</span><b>…</b></li>
+    </ol>
+    <div class="intro-bar"><i></i></div>
+  </div>
+  <p class="intro-credit">Designed &amp; developed by <b>Yafai</b></p>
+  <p class="intro-skip">Click or press any key to skip</p>
+</div>
+<script>
+/* Show the intro once per browser session, and never when the visitor asks for reduced motion. */
+(function () {
+  var seen = null;
+  try { seen = sessionStorage.getItem('dds-intro'); } catch (e) {}
+  if (seen || matchMedia('(prefers-reduced-motion: reduce)').matches) { var el = document.getElementById('intro'); if (el) el.remove(); }
+})();
+</script>
 <header class="top">
   <div class="top-in">
     <h1 class="name">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="5.5" cy="5.5" r="3.5" stroke-dasharray="3 1.5"/><circle cx="18.5" cy="5.5" r="3.5" stroke-dasharray="3 1.5"/><circle cx="5.5" cy="18.5" r="3.5" stroke-dasharray="3 1.5"/><circle cx="18.5" cy="18.5" r="3.5" stroke-dasharray="3 1.5"/><path d="M8 8l8 8M16 8l-8 8"/><rect x="9.5" y="9.5" width="5" height="5" fill="currentColor"/></svg>
       Drone Design Studio
     </h1>
-    <span class="by">Designed by <b>Yafai</b></span>
+    <span class="rev" title="Release">REV 1.0</span>
     <span class="sp"></span>
-    <button type="button" class="tbtn ghost" id="helpBtn" title="Keyboard shortcuts (?)">Shortcuts</button>
     <div class="tog sm" role="group" aria-label="Sheet theme" id="theme">
       <button type="button" data-theme-set="light">Paper</button>
       <button type="button" data-theme-set="dark">Blueprint</button>
@@ -576,13 +823,15 @@ table.asm td:nth-child(2){width:22%;white-space:nowrap}
 <main class="desk">
   <aside class="spec" id="aside"></aside>
   <section class="work" id="workwrap" aria-live="polite">
-    <div class="status"><span id="statusText">Plotting</span><span class="trk"></span></div>
+    <div class="status" role="status"><span class="st-tag">SOLVER</span><span id="statusText">Plotting</span>
+      <span class="segs" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="st-time" id="statusTime">0.0 s</span></div>
     <div id="work"></div>
   </section>
 </main>
 <footer class="credit"><div class="credit-in">
-  <span><b>Drone Design Studio</b> · Designed and developed by <b>Yafai</b></span>
-  <span class="meta" id="meta">Connecting to model…</span>
+  <span><b>Drone Design Studio</b> · Designed &amp; developed by <b>Yafai</b></span>
+  <span class="telemetry" role="status" aria-live="polite"><span class="meta" id="meta">Connecting to model…</span>
+    <span class="led-wrap"><i class="led wait" id="led" aria-hidden="true"></i><span id="sysText">SYS: CONNECTING</span></span></span>
 </div></footer>
 <div id="report" aria-hidden="true"></div>
 
@@ -616,7 +865,7 @@ const FORMS = {
     {key:'n_motors', type:'seg', label:'Number of motors', value:'4', options:[['4','4'],['6','6'],['8','8']]},
     {key:'D_in', label:'Prop diameter', unit:'in', min:2, max:30, step:0.1, value:10, d:1},
     {key:'P_in', label:'Prop pitch', unit:'in', min:1, max:30, step:0.1, value:4.5, smax:15, d:1},
-    {key:'kv', label:'Motor KV', unit:'KV', min:50, max:5000, step:10, value:920, smax:3000, d:0},
+    {key:'kv', label:'Motor KV', unit:'rpm/V', min:50, max:5000, step:10, value:920, smax:3000, d:0},
     {key:'cells', label:'Battery cells', unit:'S', min:1, max:14, step:1, value:3, d:0},
     {key:'mah', label:'Battery capacity', unit:'mAh', min:100, max:50000, step:50, value:5000, smax:30000, d:0},
     {key:'payload_kg', label:'Payload', unit:'kg', min:0, max:25, step:0.1, value:0, smax:10, d:1},
@@ -626,7 +875,7 @@ const FORMS = {
     {key:'aspect', label:'Aspect ratio', unit:'', min:3, max:20, step:0.1, value:10, d:1},
     {key:'D_in', label:'Prop diameter', unit:'in', min:2, max:30, step:0.1, value:12, smax:22, d:1},
     {key:'P_in', label:'Prop pitch', unit:'in', min:1, max:30, step:0.1, value:6, smax:15, d:1},
-    {key:'kv', label:'Motor KV', unit:'KV', min:50, max:5000, step:10, value:800, smax:3000, d:0},
+    {key:'kv', label:'Motor KV', unit:'rpm/V', min:50, max:5000, step:10, value:800, smax:3000, d:0},
     {key:'cells', label:'Battery cells', unit:'S', min:1, max:14, step:1, value:4, d:0},
     {key:'mah', label:'Battery capacity', unit:'mAh', min:100, max:50000, step:50, value:5000, smax:30000, d:0},
     {key:'payload_kg', label:'Payload', unit:'kg', min:0, max:10, step:0.1, value:0.5, d:1},
@@ -683,45 +932,56 @@ const GLYPH = {
 
 function setPct(r) { r.style.setProperty('--p', clamp((r.value - r.min) / (r.max - r.min) * 100, 0, 100) + '%'); }
 
+/* Control sub-assemblies: which section each field belongs to, per task. */
+const SEC_MAP = {
+  design: {payload_kg:'mission', min_flight_min:'mission', goal:'mission', max_size:'envelope', n_motors:'envelope', max_cells:'envelope'},
+  check: {n_motors:'airframe', span_m:'airframe', aspect:'airframe', D_in:'propulsion', P_in:'propulsion', kv:'propulsion', cells:'energy', mah:'energy', payload_kg:'energy'},
+};
+const SEC_LABEL = {config:'Configuration', mission:'Mission', envelope:'Envelope', airframe:'Airframe', propulsion:'Propulsion', energy:'Energy & mass', env:'Environment', library:'Library', saved:'Saved builds'};
+function assembly(no, key, body, reset = true) {
+  const label = SEC_LABEL[key];
+  return `<section class="asm" data-sec="${key}"><header class="asm-h">${no ? `<span class="asm-no">${String(no).padStart(2, '0')}</span>` : ''}<span class="asm-t">// ${label}</span>
+      ${reset ? `<button type="button" class="asm-reset" data-reset="${key}" title="Reset ${label.toLowerCase()} to defaults" aria-label="Reset ${label} to defaults">↺</button>` : ''}</header>
+    <div class="asm-b">${body}</div></section>`;
+}
 function renderAside() {
-  const v = vals(), design = S.mode === 'design';
-  let main = '', adv = '';
-  for (const f of FORMS[formKey()]) {
-    const h = f.type === 'seg' ? segField(f, v[f.key]) : numField(f, v[f.key]);
-    if (f.adv) adv += h; else main += h;
-  }
-  $('#aside').innerHTML = `
-    <div><p class="cap">Aircraft</p>
-      <div class="tog" role="group" aria-label="Aircraft type">
-        ${['multirotor', 'fixedwing'].map(k => `<button type="button" data-kind="${k}" aria-pressed="${S.kind === k}">${GLYPH[k]}${k === 'multirotor' ? 'Multirotor' : 'Fixed-wing'}</button>`).join('')}
-      </div></div>
-    <div><p class="cap">Task</p>
-      <div class="tog" role="group" aria-label="Task">
+  const v = vals(), design = S.mode === 'design', map = SEC_MAP[S.mode], groups = {};
+  for (const f of FORMS[formKey()]) (groups[map[f.key]] ||= []).push(f.type === 'seg' ? segField(f, v[f.key]) : numField(f, v[f.key]));
+  let no = 1;
+  const config = assembly(no++, 'config', `
+      <div class="fld"><span class="lab" id="l_kind">Aircraft</span><div class="tog" role="group" aria-labelledby="l_kind">
+        ${['multirotor', 'fixedwing'].map(k => `<button type="button" data-kind="${k}" aria-pressed="${S.kind === k}">${GLYPH[k]}${k === 'multirotor' ? 'Multirotor' : 'Fixed-wing'}</button>`).join('')}</div></div>
+      <div class="fld"><span class="lab" id="l_mode">Task</span><div class="tog" role="group" aria-labelledby="l_mode">
         <button type="button" data-mode="design" aria-pressed="${design}">Design new</button>
-        <button type="button" data-mode="check" aria-pressed="${!design}">Check a build</button>
-      </div></div>
-    <form id="form" novalidate>
-      <p class="cap" style="margin:0">${design ? 'Requirements' : 'Parts'}</p>
-      ${main}
-      ${adv ? `<details class="adv" id="adv"${S.advOpen ? ' open' : ''}><summary>More constraints</summary>${adv}</details>` : ''}
-      <details class="adv env" id="envbox"${S.envOpen ? ' open' : ''}><summary>Conditions <span class="envsum" id="envsum">${envSummary()}</span></summary>
-        ${ENV_FIELDS.map(f => numField(f, S.env[f.key])).join('')}
-        <p class="hint" style="margin:10px 0 0">Applies to the physics simulation. The ML model has no altitude or temperature input.</p></details>
-      <button class="run" type="submit" id="run"><span id="runlbl">${design ? 'Generate designs' : 'Analyse build'}</span>
+        <button type="button" data-mode="check" aria-pressed="${!design}">Check a build</button></div></div>`, false);
+  const secs = (design ? ['mission', 'envelope'] : ['airframe', 'propulsion', 'energy']).filter(k => groups[k])
+    .map(k => assembly(no++, k, groups[k].join(''))).join('');
+  const env = assembly(no++, 'env', ENV_FIELDS.map(f => numField(f, S.env[f.key])).join('')
+    + '<p class="hint">Applies to the physics simulation. The ML model has no altitude or temperature input.</p>');
+  $('#aside').innerHTML = `${config}
+    <form id="form" novalidate>${secs}${env}
+      <div class="runbar"><button class="run" type="submit" id="run"><span id="runlbl">${design ? 'Generate designs' : 'Analyse build'}</span>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
-      <p class="hint">${design
-        ? 'Screens 80,000 random builds with the ML model, then checks the best 40 with a physics simulation.'
-        : 'Runs your parts through the ML model and the physics simulation side by side.'}</p>
+        <p class="hint">${design
+          ? 'Screens 80,000 random builds with the ML model, then checks the best 40 with a physics simulation.'
+          : 'Runs your parts through the ML model and the physics simulation side by side.'}</p></div>
     </form>
-    <div class="saved"><p class="cap" style="margin:0 0 2px">Pre-built designs</p>
-      <button type="button" class="tbtn" data-act="library">Browse ${PRESETS.length} example builds</button></div>
-    <div class="saved" id="savedBox"></div>`;
+    ${assembly(0, 'library', `<button type="button" class="tbtn" data-act="library">Browse ${PRESETS.length} example builds</button>`, false)}
+    ${assembly(0, 'saved', '<div class="saved" id="savedBox"></div>', false)}
+    <button type="button" class="tbtn ghost kb" data-act="help"><kbd>?</kbd>Keyboard shortcuts</button>`;
   $$('#aside input[type=range]').forEach(setPct);
   renderSaved();
-  const d = $('#adv');
-  if (d) d.addEventListener('toggle', () => { S.advOpen = d.open; persist(); });
-  const eb = $('#envbox');
-  eb.addEventListener('toggle', () => { S.envOpen = eb.open; persist(); });
+}
+function resetSection(key) {
+  if (key === 'env') S.env = {alt_m: 0, temp_c: null, reserve_pct: 20};
+  else {
+    const v = vals(), map = SEC_MAP[S.mode];
+    for (const f of FORMS[formKey()]) if (map[f.key] === key) v[f.key] = f.nullDefault ? null : f.value;
+  }
+  persist(); renderAside();
+  const sec = $(`.asm[data-sec="${key}"]`);
+  if (sec) { sec.classList.add('flash'); setTimeout(() => sec.classList.remove('flash'), 500); }
+  toast(`${SEC_LABEL[key]} reset to defaults`);
 }
 function segField(f, cur) {
   return `<div class="fld" data-key="${f.key}"><div class="ftop"><span class="lab" id="l_${f.key}">${f.label}</span></div>
@@ -782,6 +1042,8 @@ aside.addEventListener('click', e => {
   if (!b) return;
   if (b.dataset.open) return openSaved(b.dataset.open);
   if (b.dataset.del) return deleteSaved(b);
+  if (b.dataset.reset) return resetSection(b.dataset.reset);
+  if (b.dataset.act === 'help') return toggleHelp(true);
   if (b.dataset.act === 'compare' || b.dataset.act === 'library') {
     S.view = b.dataset.act; renderWork(); $('#workwrap').scrollIntoView({block:'start', behavior:'smooth'}); return;
   }
@@ -817,7 +1079,7 @@ async function run() {
     const x = S.env[f.key];
     if (x === null && f.nullable) { body.env[f.key] = null; continue; }
     if (!isFinite(x) || x < f.min || x > f.max) {
-      $(`.fld[data-key="${f.key}"]`).classList.add('err'); $('#envbox').open = true; bad = true; continue;
+      $(`.fld[data-key="${f.key}"]`).classList.add('err'); bad = true; continue;
     }
     body.env[f.key] = x;
   }
@@ -836,8 +1098,16 @@ async function run() {
   }
   S.result = {mode, kind, req: body, data, sel: 0};
   setBusy(false);
+  if (data.offline) telemetry('fault');
   renderWork();
 }
+/* Footer telemetry LED: ready (green), solver busy (amber), offline (red), connecting (grey). */
+function telemetry(state) {
+  const [cls, text] = {ready: ['ok', 'SYS: READY'], busy: ['busy', 'SOLVER: PLOTTING'], fault: ['bad', 'SYS: OFFLINE'], wait: ['wait', 'SYS: CONNECTING']}[state];
+  const led = $('#led'); if (led) led.className = `led ${cls}`;
+  const t = $('#sysText'); if (t) t.textContent = text;
+}
+let busyT0 = 0, busyTimer = 0;
 function setBusy(b) {
   S.busy = b;
   $('#workwrap').classList.toggle('busy', b);
@@ -845,7 +1115,13 @@ function setBusy(b) {
   const lbl = $('#runlbl');
   const design = S.mode === 'design';
   if (lbl) lbl.textContent = b ? (design ? 'Generating…' : 'Analysing…') : (design ? 'Generate designs' : 'Analyse build');
-  $('#statusText').textContent = design ? 'Screening 80,000 candidate builds' : 'Running ML model and physics check';
+  $('#statusText').textContent = design ? 'Screening 80,000 candidates · physics check on best 40' : 'ML model + physics simulation';
+  clearInterval(busyTimer);
+  if (b) {
+    busyT0 = performance.now(); $('#statusTime').textContent = '0.0 s';
+    busyTimer = setInterval(() => { $('#statusTime').textContent = `${((performance.now() - busyT0) / 1000).toFixed(1)} s`; }, 100);
+  }
+  telemetry(b ? 'busy' : 'ready');
   if (b && !S.result) $('#work').innerHTML = sheet({svg:'<div style="height:380px"></div>', notes:['Plotting first sheet.'], tb:{title:'—', dwg:'—', scale:'—', sheet:'—', mass:'—'}});
 }
 
@@ -872,6 +1148,15 @@ function spread(list, lo, hi, gap) {   // keep balloons in one column from overl
   const over = list.length ? list[list.length - 1].by - hi : 0;
   if (over > 0) list.forEach(b => b.by -= over);
   return list;
+}
+/* True-to-scale bar (100 mm when it fits) in the drawing's bottom-right corner. Drawing units are mm at 1:N. */
+function scaleBar(W, H, N) {
+  const fits = v => v / N >= 20 && v / N <= 130;
+  const mm = fits(100) ? 100 : [10, 20, 50, 100, 200, 500, 1000].filter(v => v / N <= 130).pop() || 10, len = mm / N, x0 = W - 18 - len, y = H - 14;
+  let segs = '';
+  for (let i = 0; i < 4; i++) segs += `<rect class="${i % 2 ? 'sb-w' : 'sb-k'}" x="${r1(x0 + i * len / 4)}" y="${y - 4}" width="${r1(len / 4)}" height="4"/>`;
+  return `<g class="sbar" aria-hidden="true">${segs}<rect class="sb-o" x="${r1(x0)}" y="${y - 4}" width="${r1(len)}" height="4"/>
+    <text class="lbl" x="${r1(x0)}" y="${y - 8}" text-anchor="start">0</text><text class="lbl" x="${r1(x0 + len)}" y="${y - 8}" text-anchor="end">${mm} mm</text></g>`;
 }
 const angDist = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
@@ -917,7 +1202,7 @@ function drawMulti(n, D_in, P_in, wb) {
   o += B(3, mp.x + Math.cos(mp.a + .9) * ps, mp.y + Math.sin(mp.a + .9) * ps, 20);
   o += B(4, ex, ey, 116);
   o += B(5, cx - bw * .31, cy + bh * .3, 92);
-  o += `<text class="lbl" x="12" y="${H - 10}">PLAN VIEW · SCALE 1:${N}</text>`;
+  o += `<text class="lbl" x="12" y="${H - 10}">PLAN VIEW · SCALE 1:${N}</text>` + scaleBar(W, H, N);
   return {svg: `<svg class="dwg plot" viewBox="0 0 ${W} ${H}" role="img" aria-label="Plan view of a ${n}-rotor with ${fmt(wb, 0)} mm wheelbase">${DEFS}${o}</svg>`, N};
 }
 
@@ -963,7 +1248,7 @@ function drawFixed(span_m, AR, D_in, P_in) {
   const left = spread([{i:3, x:cx - Pw / 2, y:top - 6.3}, {i:2, x:cx - fw * .3, y:my + mh / 2}, {i:1, x:xL(.3), y:le(.3) + ch(.3) * .45}, {i:7, x:xL(.62) - 5, y:hinge(.62) - 6.5}], 18, H - 34, 28);
   const right = spread([{i:4, x:cx + fw * .27, y:ey + eh / 2}, {i:5, x:cx + fw * .36, y:by + bh / 2}, {i:6, x:cx + fw * .28, y:fy + fh / 2}], 18, H - 34, 28);
   o += left.map(q => balloon(q.i, q.x, q.y, 24, q.by)).join('') + right.map(q => balloon(q.i, q.x, q.y, W - 24, q.by)).join('');
-  o += `<text class="lbl" x="12" y="${H - 10}">PLAN VIEW · SCALE 1:${N}</text>`;
+  o += `<text class="lbl" x="12" y="${H - 10}">PLAN VIEW · SCALE 1:${N}</text>` + scaleBar(W, H, N);
   return {svg: `<svg class="dwg plot" viewBox="0 0 ${W} ${H}" role="img" aria-label="Plan view of a fixed-wing with ${fmt(span_m, 2)} m span">${DEFS}${o}</svg>`, N};
 }
 
@@ -1271,7 +1556,7 @@ function renderSaved() {
   const box = $('#savedBox'); if (!box) return;
   const items = S.saved || [];
   const line = it => `${it.kind === 'multirotor' ? CRAFT(it.parts.n_motors) : 'Fixed-wing'} · ${fmt(it.metrics.flight_min, 1)} min · ${fmt(it.metrics.auw_kg, 2)} kg`;
-  box.innerHTML = `<p class="cap" style="margin:0 0 2px">Saved builds</p>` + (items.length
+  box.innerHTML = (items.length
     ? items.slice().reverse().map(it => `<div class="sv"><button type="button" class="open" data-open="${esc(it.id)}" title="Open in check mode"><b>${esc(it.name)}</b><small>${line(it)}</small></button>
         <button type="button" class="del" data-del="${esc(it.id)}" aria-label="Delete ${esc(it.name)}">Delete</button></div>`).join('')
       + (items.length >= 2 ? `<button type="button" class="tbtn" data-act="compare">Compare ${items.length} builds</button>` : '')
@@ -1541,9 +1826,10 @@ document.addEventListener('visibilitychange', () => {
 
 function build3D(T, stage, cur) {
   const dark = effTheme() === 'dark';
-  const C = dark
-    ? {frame: 0x6b7787, plate: 0x56616f, metal: 0xc3ccd5, bell: 0xe8631f, prop: 0x232a33, batt: 0x4f8de8, skin: 0xd5dde6, trim: 0xe8631f, glass: 0x1b2430, grid1: 0x35587a, grid2: 0x1d3a55, hemi: 0x1a2a3a}
-    : {frame: 0x2d333b, plate: 0x3d454f, metal: 0xa3acb6, bell: 0xe2550e, prop: 0x1e2329, batt: 0x2b5fb3, skin: 0xc9d1da, trim: 0xe2550e, glass: 0x22303d, grid1: 0x8f99a4, grid2: 0xbcc4cc, hemi: 0xb6bec6};
+  // Model colours come from the --m3-* CSS tokens, so the 3D view always matches the active theme.
+  const css = getComputedStyle(document.documentElement);
+  const tok = name => new T.Color((css.getPropertyValue(`--m3-${name}`) || '#888888').trim());
+  const C = Object.fromEntries(['frame', 'plate', 'metal', 'bell', 'prop', 'batt', 'skin', 'trim', 'glass', 'grid1', 'grid2', 'hemi'].map(k => [k, tok(k)]));
   const w0 = stage.clientWidth || 800, h0 = stage.clientHeight || 480;
   const renderer = new T.WebGLRenderer({antialias: true, alpha: true, preserveDrawingBuffer: true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -2152,11 +2438,37 @@ syncTheme();
 
 const infoP = fetch('/api/info').then(r => r.json()).then(i => {
   S.info = i;
-  $('#meta').innerHTML = `<b>●</b> Model loaded · scikit-learn ${esc(i.sklearn)} · Python ${esc(i.python)}`;
+  $('#meta').textContent = `MODEL sklearn ${i.sklearn} · PY ${i.python}`;
+  if (!S.busy) telemetry('ready');
   return i;
-}).catch(() => { $('#meta').textContent = 'Model server not reachable'; return null; });
+}).catch(() => { $('#meta').textContent = 'Model server not reachable'; telemetry('fault'); return null; });
+/* Start-up intro: the boot log reports the real model and server state, then the overlay fades out. */
+(function intro() {
+  const el = $('#intro'); if (!el) return;
+  try { sessionStorage.setItem('dds-intro', '1'); } catch (e) {}
+  const t0 = performance.now();
+  let closed = false;
+  const mark = (k, text, cls) => { const b = $(`[data-k="${k}"] b`, el); if (b) { b.textContent = text; b.className = cls; } };
+  const onKey = e => { e.preventDefault(); e.stopPropagation(); close(); };
+  function close() {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener('keydown', onKey, true);
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 480);
+  }
+  document.addEventListener('keydown', onKey, true);
+  el.addEventListener('click', close);
+  const ready = infoP.then(i => {
+    mark('model', i ? `sklearn ${i.sklearn}` : 'OFFLINE', i ? 'ok' : 'bad');
+    mark('solver', i ? 'READY' : 'UNAVAILABLE', i ? 'ok' : 'bad');
+  });
+  Promise.race([ready, new Promise(r => setTimeout(r, 4000))]).then(() => {
+    el.classList.add('done');
+    setTimeout(close, Math.max(450, 2400 - (performance.now() - t0)));
+  });
+})();
 
-$('#helpBtn').addEventListener('click', () => toggleHelp(true));
 const wantCompare = location.hash.includes('compare');
 infoP.then(() => browserSaved() ? {ok: true, items: lsSaved()} : fetch('/api/saved').then(r => r.json())).then(d => {
   if (d.ok) { S.saved = d.items; renderSaved(); }
