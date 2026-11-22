@@ -17,6 +17,9 @@ Designed and developed by **Yafai**.
 - **Conditions:** altitude, air temperature and landing battery reserve feed the physics.
 - **Pre-built designs:** 10 example builds from 5-inch FPV to a 3 m endurance wing.
 - **Frame layouts:** Quad X / + / H / Deadcat, Hex X / + / Y6 coaxial, Octo X / + / X8 coaxial, and Conventional / V-tail / Flying wing airframes. The layout changes the drawing, 3D model and parts list; flight numbers come from motor count, props, battery and payload. Browse them all with `#frames`.
+- **Auto-tune:** on a build check, searches battery, cells, KV and prop pitch (optionally prop size) with the physics model for the longest flight that passes every limit, then applies it in one click.
+- **Share links:** Export → Copy share link gives a URL (`#build=…`) that reopens the exact build, frame layout and conditions.
+- **Command palette:** press Ctrl+K to search every action, pre-built design and frame layout.
 - **Saved builds and comparison**, **PDF design report**, **parts list CSV** and keyboard shortcuts (press `?`).
 
 ## Run it locally

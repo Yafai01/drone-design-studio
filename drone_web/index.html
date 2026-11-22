@@ -727,6 +727,32 @@ td{border-bottom-color:var(--line)}
 .lc-use b{color:var(--ink);font-weight:600;margin-right:4px}
 .asm[data-sec="library"] .asm-b{gap:8px}
 
+/* auto-tune dialog */
+.tune .tune-in{display:grid;gap:12px}
+.tune .nl{font-size:12.5px}
+.tune-hero{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+.tune-hero .kl{display:block;font-size:12px;color:var(--ink2)}
+.tune-hero .kv{font:600 22px var(--f-mono);font-variant-numeric:tabular-nums}
+.tune-gain{font:700 15px var(--f-mono);padding:2px 8px;border-radius:2px}
+.tune-gain.up{color:var(--ok);background:var(--ok-soft)} .tune-gain.down{color:var(--bad);background:var(--bad-soft)}
+.tune table{font-size:12.5px}
+.tune-msg{margin:0;font-size:12.5px;color:var(--ink2)}
+.tune-msg.err,.tune .err{color:var(--bad)}
+
+/* command palette */
+.cmdk{margin:12vh auto auto;width:min(580px,calc(100vw - 32px));padding:0;border:1px solid var(--line);border-radius:var(--r);background:var(--canvas);color:var(--ink);box-shadow:0 24px 48px -16px rgba(0,0,0,.45)}
+.cmdk::backdrop{background:rgba(7,10,14,.45)}
+.cmdk input{width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:15px 18px;font:500 15px var(--f-ui);color:var(--ink);outline:0}
+.cmdk ul{list-style:none;margin:0;padding:6px;max-height:min(52vh,440px);overflow:auto}
+.cmdk li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 12px;border-radius:2px;cursor:pointer;font-size:13.5px;border-left:2px solid transparent}
+.cmdk li[aria-selected="true"]{background:var(--well);border-left-color:var(--acc)}
+.cmdk li.cmdk-none{color:var(--ink2);cursor:default}
+.cmdk-meta{display:flex;align-items:center;gap:10px;flex:none}
+.cmdk-meta small{font:500 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+.cmdk-meta kbd{font-size:10px}
+.cmdk-foot{margin:0;padding:8px 16px;border-top:1px solid var(--line);font:10.5px var(--f-mono);color:var(--ink2);display:flex;gap:6px;align-items:center}
+.kbrow{display:flex;gap:6px;flex-wrap:wrap}
+
 /* start-up intro */
 .intro{position:fixed;inset:0;z-index:100;display:grid;place-items:center;cursor:pointer;color:var(--ink);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
@@ -914,6 +940,7 @@ for (const part of location.hash.slice(1).split(',')) {
   if (part === 'multirotor' || part === 'fixedwing') S.kind = part;
   if (part === 'design' || part === 'check') S.mode = part;
   if (part === '3d') S.panel = 'v3d';
+  if (part.startsWith('build=')) S.shared = decodeBuild(part.slice(6)) || false;
 }
 const formKey = () => `${S.kind}:${S.mode}`;
 function vals() {
@@ -983,7 +1010,8 @@ function renderAside() {
     ${assembly(0, 'library', `<button type="button" class="tbtn" data-act="library">Browse ${PRESETS.length} example builds</button>
       <button type="button" class="tbtn" data-act="frames">Browse frame layouts</button>`, false)}
     ${assembly(0, 'saved', '<div class="saved" id="savedBox"></div>', false)}
-    <button type="button" class="tbtn ghost kb" data-act="help"><kbd>?</kbd>Keyboard shortcuts</button>`;
+    <div class="kbrow"><button type="button" class="tbtn ghost kb" data-act="palette"><kbd>Ctrl K</kbd>Search</button>
+      <button type="button" class="tbtn ghost kb" data-act="help"><kbd>?</kbd>Shortcuts</button></div>`;
   $$('#aside input[type=range]').forEach(setPct);
   renderSaved();
 }
@@ -1073,6 +1101,7 @@ aside.addEventListener('click', e => {
   if (b.dataset.reset) return resetSection(b.dataset.reset);
   if (b.dataset.frame) return setFrame(b.dataset.fk, b.dataset.frame);
   if (b.dataset.act === 'help') return toggleHelp(true);
+  if (b.dataset.act === 'palette') return openPalette();
   if (b.dataset.act === 'compare' || b.dataset.act === 'library' || b.dataset.act === 'frames') {
     S.view = b.dataset.act; renderWork(); $('#workwrap').scrollIntoView({block:'start', behavior:'smooth'}); return;
   }
@@ -1186,7 +1215,7 @@ function scaleBar(W, H, N) {
   let segs = '';
   for (let i = 0; i < 4; i++) segs += `<rect class="${i % 2 ? 'sb-w' : 'sb-k'}" x="${r1(x0 + i * len / 4)}" y="${y - 4}" width="${r1(len / 4)}" height="4"/>`;
   return `<g class="sbar" aria-hidden="true">${segs}<rect class="sb-o" x="${r1(x0)}" y="${y - 4}" width="${r1(len)}" height="4"/>
-    <text class="lbl" x="${r1(x0)}" y="${y - 8}" text-anchor="start">0</text><text class="lbl" x="${r1(x0 + len)}" y="${y - 8}" text-anchor="end">${mm} mm</text></g>`;
+    <text class="lbl" x="${r1(x0 + len / 2)}" y="${y - 8}" text-anchor="middle">${mm} mm</text></g>`;
 }
 const angDist = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
@@ -1492,13 +1521,15 @@ const PANELS = [['drawing', 'Drawing'], ['v3d', '3D view'], ['perf', 'Performanc
 function resultHead(title, sub, design) {
   return `<div class="res-head"><div class="res-title"><h2>${title}</h2><p>${sub}</p></div>
     <div class="ractions">
-      ${design ? `<button type="button" class="tbtn pri" data-act="tweak" title="Open this design in Check a build to change parts">${icon('tweak')}Tweak</button>` : ''}
+      ${design ? `<button type="button" class="tbtn pri" data-act="tweak" title="Open this design in Check a build to change parts">${icon('tweak')}Tweak</button>`
+               : `<button type="button" class="tbtn pri" data-act="tune" title="Search battery, KV and props for a longer flight">${icon('tune')}Auto-tune</button>`}
       <button type="button" class="tbtn" data-act="save">${icon('save')}Save</button>
       <details class="menu"><summary class="tbtn">${icon('csv')}Export</summary>
         <div class="menu-pop">
           <button type="button" data-act="report">${icon('report')}<span>Design report<small>Multi-page PDF</small></span></button>
           <button type="button" data-act="print">${icon('print')}<span>Print drawing<small>The drawing sheet only</small></span></button>
           <button type="button" data-act="csv">${icon('csv')}<span>Parts list<small>CSV for spreadsheets</small></span></button>
+          <button type="button" data-act="share">${icon('link')}<span>Copy share link<small>Opens this exact build</small></span></button>
         </div></details>
     </div></div>`;
 }
@@ -1624,6 +1655,8 @@ const ICO = {
   csv:'<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>',
   back:'<path d="M19 12H5M11 6l-6 6 6 6"/>',
   report:'<path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5M9 12h7M9 16h7M9 8h3"/>',
+  tune:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  link:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
 };
 const icon = k => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">${ICO[k]}</svg>`;
 function partsOf(kind, o) {
@@ -2266,6 +2299,184 @@ function build3D(T, stage, cur) {
   };
 }
 
+/* ---------------- auto-tune ---------------- */
+function openTune() {
+  const c = S.cur; if (!c) return;
+  let dlg = $('#tunedlg');
+  if (!dlg) {
+    dlg = document.createElement('dialog'); dlg.id = 'tunedlg'; dlg.className = 'help rep tune';
+    dlg.innerHTML = `<div class="tune-in"><div class="help-h"><h2>Auto-tune</h2><button type="button" class="tbtn" data-close>Close</button></div>
+      <p class="rep-lead" id="tune_lead"></p>
+      <label class="nl"><input type="checkbox" id="tune_d">Allow a different prop diameter (changes the frame size)</label>
+      <button type="button" class="run" id="tune_run">Run auto-tune</button>
+      <div id="tune_out" aria-live="polite"></div></div>`;
+    dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+    $('#tune_run', dlg).addEventListener('click', doTune);
+    document.body.appendChild(dlg);
+  }
+  $('#tune_lead').textContent = `Searches battery capacity, cell count, motor KV and prop pitch for the longest flight that passes every physics limit`
+    + (c.kind === 'multirotor' ? ', keeping thrust/weight at 2 or more and hover throttle at 65% or less' : '')
+    + `. Battery capacity can grow to 3× your current pack. Payload, ${c.kind === 'multirotor' ? 'motor count' : 'wingspan'} and conditions stay as they are.`;
+  $('#tune_out').innerHTML = '';
+  dlg.showModal();
+}
+async function doTune() {
+  const c = S.cur, btn = $('#tune_run');
+  btn.disabled = true; btn.textContent = 'Searching…';
+  try {
+    const r = await fetch('/api/optimize', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({kind: c.kind, ...c.parts, env: c.env, keep: $('#tune_d').checked ? [] : ['D_in']})});
+    renderTune(await r.json());
+  } catch (e) {
+    $('#tune_out').innerHTML = '<p class="tune-msg err">The tuner could not reach the model server. Try again in a moment.</p>';
+  } finally { btn.disabled = false; btn.textContent = 'Run auto-tune again'; }
+}
+function renderTune(d) {
+  const out = $('#tune_out');
+  if (!d.ok) { out.innerHTML = `<p class="tune-msg err">${esc(d.message)}</p>`; return; }
+  if (!d.found) { out.innerHTML = '<p class="tune-msg">No combination in the search range passes every limit. Allow a different prop diameter, or lower the payload.</p>'; return; }
+  if (!d.changes.length) { out.innerHTML = '<p class="tune-msg">Your build is already the best the tuner can find within these limits.</p>'; return; }
+  const multi = d.kind === 'multirotor', b = d.before, a = d.after, gain = a.flight_min - b.flight_min;
+  const v = (k, x) => `${fmt(x, SWEEP[k].d)}${SWEEP[k].unit ? ' ' + SWEEP[k].unit : ''}`;
+  const res = [['Flight time', 'flight_min', 'min', 1], ['All-up weight', 'auw_kg', 'kg', 2], ['Thrust / weight', 'tw_ratio', '', 2],
+    multi ? ['Hover throttle', 'hover_throttle_pct', '%', 0] : ['Range', 'range_km', 'km', 0]];
+  out.innerHTML = `<div class="tune-hero"><div><span class="kl">Flight time</span>
+      <span class="kv">${fmt(b.flight_min, 1)} → ${fmt(a.flight_min, 1)}<small> min</small></span></div>
+      <span class="tune-gain ${gain >= 0 ? 'up' : 'down'}">${gain >= 0 ? '+' : '−'}${fmt(Math.abs(gain), 1)} min</span></div>
+    <table><thead><tr><th>Part</th><th class="n">Now</th><th class="n">Tuned</th></tr></thead><tbody>
+      ${d.changes.map(ch => `<tr><td>${SWEEP[ch.param].label}</td><td class="n">${v(ch.param, ch.from)}</td><td class="n"><b>${v(ch.param, ch.to)}</b></td></tr>`).join('')}</tbody></table>
+    <table><thead><tr><th>Result</th><th class="n">Now</th><th class="n">Tuned</th></tr></thead><tbody>
+      ${res.map(([l, k, u, dg]) => `<tr><td>${l}</td><td class="n">${fmt(b[k], dg)}${u ? ' ' + u : ''}</td><td class="n">${fmt(a[k], dg)}${u ? ' ' + u : ''}</td></tr>`).join('')}</tbody></table>
+    <p class="tune-msg">Physics simulation at your conditions. The ML model rates the tuned build ${Math.round(d.ml_prob * 100)}% likely to be feasible.${b.feasible ? '' : ' Your current build fails at least one limit; the tuned build passes them all.'}</p>
+    <button type="button" class="run" id="tune_apply">Apply tuned build</button>`;
+  $('#tune_apply').addEventListener('click', () => {
+    $('#tunedlg').close();
+    loadIntoCheck(d.kind, {...S.cur.parts, ...d.parts}, S.cur.env);
+    toast('Tuned build applied');
+  });
+}
+
+/* ---------------- share link ---------------- */
+function shareUrl() {
+  const c = S.cur;
+  const b64 = btoa(JSON.stringify({k: c.kind, p: c.parts, f: c.frame, e: c.env})).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${location.origin}${location.pathname}#build=${b64}`;
+}
+async function copyShare() {
+  const url = shareUrl();
+  try { await navigator.clipboard.writeText(url); toast('Share link copied. Anyone with it can open this build.'); }
+  catch (e) {
+    let dlg = $('#sharedlg');
+    if (!dlg) {
+      dlg = document.createElement('dialog'); dlg.id = 'sharedlg'; dlg.className = 'help rep';
+      dlg.innerHTML = `<div class="help-h"><h2>Share link</h2><button type="button" class="tbtn" data-close>Close</button></div>
+        <p class="rep-lead">Your browser blocked automatic copying. Select the link and copy it.</p><label class="rf">Link<input id="share_url" readonly></label>`;
+      dlg.addEventListener('click', ev => { if (ev.target === dlg || ev.target.closest('[data-close]')) dlg.close(); });
+      document.body.appendChild(dlg);
+    }
+    $('#share_url').value = url; dlg.showModal(); $('#share_url').select();
+  }
+}
+/* Reads a #build= link back into a validated check-mode build. */
+function decodeBuild(s) {
+  try {
+    const o = JSON.parse(atob(s.replace(/-/g, '+').replace(/_/g, '/')));
+    if (o.k !== 'multirotor' && o.k !== 'fixedwing') return null;
+    const v = {};
+    for (const f of FORMS[`${o.k}:check`]) {
+      const x = o.p && o.p[f.key];
+      if (f.type === 'seg') { if (!f.options.some(([val]) => val === String(x))) return null; v[f.key] = String(x); }
+      else { const n = Number(x); if (!isFinite(n) || n < f.min || n > f.max) return null; v[f.key] = n; }
+    }
+    const env = {};
+    if (o.e && typeof o.e === 'object') {
+      for (const f of ENV_FIELDS) {
+        const x = o.e[f.key];
+        if (f.key === 'temp_c' && (x == null || o.e.standard_day)) { env.temp_c = null; continue; }
+        const n = Number(x); if (isFinite(n) && n >= f.min && n <= f.max) env[f.key] = n;
+      }
+    }
+    return {kind: o.k, values: v, frame: typeof o.f === 'string' ? o.f : null, env};
+  } catch (e) { return null; }
+}
+
+/* ---------------- command palette (Ctrl+K) ---------------- */
+function switchTo({kind, mode}) {
+  if (S.busy) return;
+  if (kind) S.kind = kind; if (mode) S.mode = mode;
+  S.view = null; persist(); renderAside(); run();
+}
+function commands() {
+  const list = [], add = (label, group, fn, hint = '') => list.push({label, group, fn, hint});
+  add(S.mode === 'design' ? 'Generate designs' : 'Analyse build', 'Run', () => run(), 'Ctrl Enter');
+  add('Design new', 'Task', () => switchTo({mode: 'design'}), 'D');
+  add('Check a build', 'Task', () => switchTo({mode: 'check'}), 'C');
+  add('Multirotor', 'Aircraft', () => switchTo({kind: 'multirotor'}), 'M');
+  add('Fixed-wing', 'Aircraft', () => switchTo({kind: 'fixedwing'}), 'F');
+  if (S.cur && !S.view) {
+    PANELS.forEach(([k, l]) => add(`Show ${l}`, 'Tab', () => showPanel(k)));
+    add('Save build', 'Build', saveCurrent, 'S');
+    if (S.result && S.result.mode === 'check') add('Auto-tune this build', 'Build', openTune);
+    if (S.result && S.result.mode === 'design') add('Tweak this design', 'Build', () => loadIntoCheck(S.cur.kind, S.cur.parts, S.cur.env), 'T');
+    add('Design report (PDF)', 'Export', openReportDialog, 'R');
+    add('Print drawing', 'Export', () => { document.body.classList.add('printdraw'); window.print(); });
+    add('Parts list (CSV)', 'Export', exportCsv);
+    add('Copy share link', 'Export', copyShare);
+  }
+  add('Pre-built designs', 'Browse', () => { S.view = 'library'; renderWork(); }, 'L');
+  add('Frame layouts', 'Browse', () => { S.view = 'frames'; renderWork(); });
+  if (S.saved.length) add('Compare saved builds', 'Browse', () => { S.view = 'compare'; renderWork(); }, 'K');
+  PRESETS.forEach(pr => add(pr.name, 'Pre-built design', () => openPreset(pr.id)));
+  [4, 6, 8, 'fw'].forEach(fk => FRAMES[fk].forEach(f => add(f.name, 'Frame layout', () => useFrame(String(fk), f.id))));
+  add('Paper theme', 'Theme', () => setTheme('light'));
+  add('Blueprint theme', 'Theme', () => setTheme('dark'));
+  add('Keyboard shortcuts', 'Help', () => toggleHelp(true), '?');
+  return list;
+}
+const PAL = {items: [], shown: [], sel: 0};
+function openPalette() {
+  let dlg = $('#cmdk');
+  if (!dlg) {
+    dlg = document.createElement('dialog'); dlg.id = 'cmdk'; dlg.className = 'cmdk';
+    dlg.innerHTML = `<input id="cmdk_q" type="text" placeholder="Search actions, designs and layouts…" autocomplete="off" spellcheck="false"
+        role="combobox" aria-expanded="true" aria-controls="cmdk_list" aria-label="Search commands">
+      <ul id="cmdk_list" role="listbox"></ul>
+      <p class="cmdk-foot"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> run · <kbd>Esc</kbd> close</p>`;
+    dlg.addEventListener('click', e => {
+      if (e.target === dlg) return dlg.close();
+      const li = e.target.closest('li[data-i]'); if (li) execPalette(Number(li.dataset.i));
+    });
+    const q = $('#cmdk_q', dlg);
+    q.addEventListener('input', () => { PAL.sel = 0; drawPalette(); });
+    q.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        PAL.sel = clamp(PAL.sel + (e.key === 'ArrowDown' ? 1 : -1), 0, Math.max(0, PAL.shown.length - 1)); drawPalette();
+      } else if (e.key === 'Enter') { e.preventDefault(); execPalette(PAL.sel); }
+    });
+    document.body.appendChild(dlg);
+  }
+  PAL.items = commands(); PAL.sel = 0;
+  $('#cmdk_q').value = '';
+  drawPalette();
+  dlg.showModal(); $('#cmdk_q').focus();
+}
+function drawPalette() {
+  const toks = $('#cmdk_q').value.toLowerCase().split(/\s+/).filter(Boolean);
+  PAL.shown = PAL.items.filter(c => toks.every(t => `${c.label} ${c.group}`.toLowerCase().includes(t))).slice(0, 60);
+  const ul = $('#cmdk_list');
+  ul.innerHTML = PAL.shown.length
+    ? PAL.shown.map((c, i) => `<li role="option" id="cmdk_${i}" data-i="${i}" aria-selected="${i === PAL.sel}"><span>${esc(c.label)}</span>
+        <span class="cmdk-meta">${c.hint ? `<kbd>${esc(c.hint)}</kbd>` : ''}<small>${esc(c.group)}</small></span></li>`).join('')
+    : '<li class="cmdk-none">No matches</li>';
+  $('#cmdk_q').setAttribute('aria-activedescendant', PAL.shown.length ? `cmdk_${PAL.sel}` : '');
+  const cur = $(`#cmdk_${PAL.sel}`); if (cur) cur.scrollIntoView({block: 'nearest'});
+}
+function execPalette(i) {
+  const c = PAL.shown[i]; if (!c) return;
+  $('#cmdk').close(); c.fn();
+}
+
 /* ---------------- design report ---------------- */
 let repMeta = {project:'', author:'', org:'', notes:''};
 try { Object.assign(repMeta, JSON.parse(localStorage.getItem('dds-report') || '{}')); } catch (e) {}
@@ -2387,7 +2598,7 @@ window.addEventListener('afterprint', () => {
 });
 
 /* ---------------- keyboard shortcuts ---------------- */
-const KEYS = [['Ctrl + Enter', 'Run the current form'], ['D / C', 'Design new / Check a build'], ['M / F', 'Multirotor / Fixed-wing'],
+const KEYS = [['Ctrl + K', 'Search actions, designs and layouts'], ['Ctrl + Enter', 'Run the current form'], ['D / C', 'Design new / Check a build'], ['M / F', 'Multirotor / Fixed-wing'],
   ['1 2 3', 'Switch design sheet'], ['T', 'Tweak this design'], ['S', 'Save build'], ['R', 'Design report (PDF)'], ['K', 'Compare saved builds'], ['L', 'Pre-built designs'], ['?', 'Show or hide shortcuts']];
 function toggleHelp(force) {
   let dlg = $('#help');
@@ -2404,6 +2615,7 @@ function toggleHelp(force) {
 }
 document.addEventListener('keydown', e => {
   const typing = e.target.closest && e.target.closest('input,textarea,select,[contenteditable="true"]');
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return $('#cmdk')?.open ? $('#cmdk').close() : openPalette(); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); return run(); }
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key.toLowerCase();
@@ -2630,6 +2842,8 @@ work.addEventListener('click', e => {
   const act = b.dataset.act;
   if (act === 'tweak' && S.cur && !S.busy) return loadIntoCheck(S.cur.kind, S.cur.parts, S.cur.env);
   if (act === 'report' && S.cur) return openReportDialog();
+  if (act === 'tune' && S.cur) return openTune();
+  if (act === 'share' && S.cur) return copyShare();
   if (act === 'save') return saveCurrent();
   if (act === 'print') { document.body.classList.add('printdraw'); return window.print(); }
   if (act === 'csv') return exportCsv();
@@ -2659,11 +2873,13 @@ const root = document.documentElement;
 const effTheme = () => root.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 const syncTheme = () => $$('#theme button').forEach(b => b.setAttribute('aria-pressed', b.dataset.themeSet === effTheme()));
 try { const t = localStorage.getItem('dds-theme'); if (t) root.dataset.theme = t; } catch (e) {}
-$('#theme').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  root.dataset.theme = b.dataset.themeSet;
-  try { localStorage.setItem('dds-theme', b.dataset.themeSet); } catch (e) {}
+function setTheme(t) {
+  root.dataset.theme = t;
+  try { localStorage.setItem('dds-theme', t); } catch (e) {}
   syncTheme(); rebuild3D();
+}
+$('#theme').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (b) setTheme(b.dataset.themeSet);
 });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { syncTheme(); rebuild3D(); });
 syncTheme();
@@ -2707,6 +2923,14 @@ infoP.then(() => browserSaved() ? {ok: true, items: lsSaved()} : fetch('/api/sav
   if (wantCompare) { if (S.saved.length) { S.view = 'compare'; renderWork(); } else run(); }
 }).catch(() => { if (wantCompare) run(); });
 
+if (S.shared) {   // a #build= share link: open that exact build in Check a build
+  const b = S.shared, fk = frameKey(b.kind, b.values.n_motors);
+  S.kind = b.kind; S.mode = 'check'; S.values[`${b.kind}:check`] = b.values;
+  if (b.frame && (FRAMES[fk] || []).some(f => f.id === b.frame)) S.frames[fk] = b.frame;
+  Object.assign(S.env, b.env);
+  persist();
+  setTimeout(() => toast('Opened a shared build'), 2600);
+} else if (S.shared === false) setTimeout(() => toast('That share link is not valid, so the app opened normally.'), 2600);
 renderAside();
 if (location.hash.includes('library')) { S.view = 'library'; renderWork(); }
 else if (location.hash.includes('frames')) { S.view = 'frames'; renderWork(); }

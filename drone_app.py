@@ -186,6 +186,76 @@ def api_sweep(body):
     return {"ok": True, "kind": kind, "param": param, "points": pts}
 
 
+# ---------- auto-tune: coordinate search over parts using the physics simulation ----------
+TUNABLE = ["D_in", "P_in", "kv", "cells", "mah"]
+
+
+def _tune_grid(param, start, parts):
+    """Candidate values for one part, bounded relative to the user's original build."""
+    lo, hi, _ = PART_RANGES[param]
+    if param == "cells":
+        vals = np.arange(2, 13)
+    elif param == "mah":
+        vals = np.round(np.geomspace(max(lo, start * .35), min(hi, start * 3), 31) / 50) * 50
+    elif param == "kv":
+        vals = np.round(np.geomspace(max(lo, start * .4), min(hi, start * 2.5), 31) / 10) * 10
+    elif param == "P_in":
+        d = parts["D_in"]
+        vals = np.round(np.linspace(max(lo, d * .3), min(hi, d * 1.0), 25), 1)
+    else:  # D_in
+        vals = np.round(np.linspace(max(lo, start * .6), min(hi, start * 1.6), 25), 1)
+    vals = np.unique(np.append(vals, parts[param]))
+    return vals.astype(int) if PART_RANGES[param][2] else vals
+
+
+def _tune_ok(kind, s):
+    ok = s["feasible"] == 1
+    if kind == "multirotor":   # same margins the design search uses
+        ok &= (s["tw_ratio"] >= 2.0) & (s["hover_throttle_pct"] <= 65)
+    return ok
+
+
+def api_optimize(body):
+    kind = kind_of(body)
+    parts = parse_parts(body, kind)
+    env = parse_env(body)
+    keep = set(body.get("keep") or [])
+    free = [p for p in TUNABLE if p not in keep]
+    if not free:
+        raise BadInput("Choose at least one part the tuner may change")
+    sim = sim_multirotor if kind == "multirotor" else sim_fixedwing
+    cur = dict(parts)
+    with LOCK, conditions(env):
+        s0 = sim(pd.DataFrame([cur])).iloc[0]
+        best_ok = bool(_tune_ok(kind, s0))
+        best = float(s0["flight_min"]) if best_ok else -1.0
+        for _ in range(4):
+            changed = False
+            for prm in free:
+                vals = _tune_grid(prm, parts[prm], cur)
+                X = pd.DataFrame([cur] * len(vals))
+                X[prm] = vals
+                sm = sim(X)
+                ok = _tune_ok(kind, sm).values
+                if not ok.any():
+                    continue
+                fl = np.where(ok, sm["flight_min"].values, -1.0)
+                i = int(np.argmax(fl))
+                if fl[i] > best + 1e-6:
+                    cur[prm] = vals[i].item()
+                    best, best_ok, changed = float(fl[i]), True, True
+            if not changed:
+                break
+        s1 = sim(pd.DataFrame([cur])).iloc[0]
+        p1 = ml_predict(kind, pd.DataFrame([cur])).iloc[0]
+    keys = ["flight_min", "auw_kg", "tw_ratio"] + (["hover_throttle_pct", "max_current_a"] if kind == "multirotor"
+                                                   else ["range_km", "cruise_speed_ms"])
+    summ = lambda s: {**{k: round(float(s[k]), 4) for k in keys}, "feasible": bool(s["feasible"])}
+    changes = [{"param": k, "from": parts[k], "to": cur[k]} for k in TUNABLE if cur[k] != parts[k]]
+    return {"ok": True, "kind": kind, "parts": cur, "before": summ(s0), "after": summ(s1), "changes": changes,
+            "found": best_ok, "ml_prob": round(float(p1["feasible_prob"]), 4), "conditions": public_env(env)}
+
+
 # ---------- engineering analysis: weight breakdown, key figures, sensitivity ----------
 def mass_breakdown(kind, p):
     """Component masses using the same formulas as drone_design's physics simulation."""
@@ -356,7 +426,7 @@ def api_check(body):
 
 
 ROUTES = {"/api/design": api_design, "/api/check": api_check, "/api/sweep": api_sweep,
-          "/api/analysis": api_analysis, "/api/saved": api_saved_add}
+          "/api/analysis": api_analysis, "/api/optimize": api_optimize, "/api/saved": api_saved_add}
 
 
 class Handler(BaseHTTPRequestHandler):
