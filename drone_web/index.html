@@ -716,6 +716,17 @@ td{border-bottom-color:var(--line)}
 @media (prefers-reduced-motion:reduce){.segs i,.led{animation:none}.segs i:nth-child(odd){background:var(--acc-soft)}}
 @media print{.credit,.status{display:none!important}.work{background:none;border:0;padding:0;min-height:0}}
 
+/* frame layouts */
+.linkbtn{border:0;background:none;padding:0;cursor:pointer;color:var(--acc);font:500 11.5px var(--f-ui)}
+.linkbtn:hover{text-decoration:underline}
+.fgroup{margin:22px 0 10px}
+.fgroup:first-of-type{margin-top:4px}
+.lc.fc.on{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.lc .lc-sel{font:500 10.5px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--acc)}
+.lc-use{margin:0;font-size:12px;color:var(--ink2)}
+.lc-use b{color:var(--ink);font-weight:600;margin-right:4px}
+.asm[data-sec="library"] .asm-b{gap:8px}
+
 /* start-up intro */
 .intro{position:fixed;inset:0;z-index:100;display:grid;place-items:center;cursor:pointer;color:var(--ink);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
@@ -889,7 +900,7 @@ const ENV_FIELDS = [
 ];
 const ENV_KEYS = new Set(ENV_FIELDS.map(f => f.key));
 const S = {kind:'multirotor', mode:'design', values:{}, busy:false, result:null, advOpen:false, envOpen:false,
-  env:{alt_m:0, temp_c:null, reserve_pct:20}, anl:null, anlP:null, swP:null, info:null,
+  env:{alt_m:0, temp_c:null, reserve_pct:20}, frames:{4:'x', 6:'x', 8:'x', fw:'conv'}, anl:null, anlP:null, swP:null, info:null,
   view:null, saved:[], cur:null, sweep:{param:'mah', key:null, lo:0, hi:0, data:null, seq:0}};
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem('dds2') || '{}'); } catch (e) {}
@@ -898,6 +909,7 @@ if (saved.mode) S.mode = saved.mode;
 S.advOpen = !!saved.advOpen;
 S.envOpen = !!saved.envOpen;
 if (saved.env && typeof saved.env === 'object') Object.assign(S.env, saved.env);
+if (saved.frames && typeof saved.frames === 'object') Object.assign(S.frames, saved.frames);
 for (const part of location.hash.slice(1).split(',')) {
   if (part === 'multirotor' || part === 'fixedwing') S.kind = part;
   if (part === 'design' || part === 'check') S.mode = part;
@@ -914,7 +926,7 @@ function vals() {
   return S.values[k];
 }
 function persist() {
-  try { localStorage.setItem('dds2', JSON.stringify({kind:S.kind, mode:S.mode, values:S.values, advOpen:S.advOpen, envOpen:S.envOpen, env:S.env})); } catch (e) {}
+  try { localStorage.setItem('dds2', JSON.stringify({kind:S.kind, mode:S.mode, values:S.values, advOpen:S.advOpen, envOpen:S.envOpen, env:S.env, frames:S.frames})); } catch (e) {}
 }
 const fieldDef = key => ENV_KEYS.has(key) ? ENV_FIELDS.find(f => f.key === key) : FORMS[formKey()].find(f => f.key === key);
 const bucket = key => ENV_KEYS.has(key) ? S.env : vals();
@@ -947,6 +959,8 @@ function assembly(no, key, body, reset = true) {
 function renderAside() {
   const v = vals(), design = S.mode === 'design', map = SEC_MAP[S.mode], groups = {};
   for (const f of FORMS[formKey()]) (groups[map[f.key]] ||= []).push(f.type === 'seg' ? segField(f, v[f.key]) : numField(f, v[f.key]));
+  const fk = S.kind === 'multirotor' ? (v.n_motors ? Number(v.n_motors) : null) : 'fw';
+  if (fk && FRAMES[fk]) (groups[design ? 'envelope' : 'airframe'] ||= []).push(frameField(fk));
   let no = 1;
   const config = assembly(no++, 'config', `
       <div class="fld"><span class="lab" id="l_kind">Aircraft</span><div class="tog" role="group" aria-labelledby="l_kind">
@@ -966,11 +980,25 @@ function renderAside() {
           ? 'Screens 80,000 random builds with the ML model, then checks the best 40 with a physics simulation.'
           : 'Runs your parts through the ML model and the physics simulation side by side.'}</p></div>
     </form>
-    ${assembly(0, 'library', `<button type="button" class="tbtn" data-act="library">Browse ${PRESETS.length} example builds</button>`, false)}
+    ${assembly(0, 'library', `<button type="button" class="tbtn" data-act="library">Browse ${PRESETS.length} example builds</button>
+      <button type="button" class="tbtn" data-act="frames">Browse frame layouts</button>`, false)}
     ${assembly(0, 'saved', '<div class="saved" id="savedBox"></div>', false)}
     <button type="button" class="tbtn ghost kb" data-act="help"><kbd>?</kbd>Keyboard shortcuts</button>`;
   $$('#aside input[type=range]').forEach(setPct);
   renderSaved();
+}
+function frameField(fk) {
+  const list = FRAMES[fk], cur = list.find(f => f.id === S.frames[fk]) || list[0];
+  return `<div class="fld" data-key="frame"><div class="ftop"><span class="lab" id="l_frame">${fk === 'fw' ? 'Airframe layout' : 'Frame layout'}</span>
+      <button type="button" class="linkbtn" data-act="frames">All layouts</button></div>
+    <div class="tog sm" role="group" aria-labelledby="l_frame">${list.map(f =>
+      `<button type="button" data-frame="${f.id}" data-fk="${fk}" aria-pressed="${f.id === cur.id}" title="${esc(f.name)}">${esc(f.short)}</button>`).join('')}</div>
+    <div class="fhelp">${esc(cur.desc)}</div></div>`;
+}
+function setFrame(fk, id) {
+  S.frames[fk === 'fw' ? 'fw' : Number(fk)] = id;
+  persist(); renderAside();
+  if (S.result && !S.busy && !S.view) renderWork();
 }
 function resetSection(key) {
   if (key === 'env') S.env = {alt_m: 0, temp_c: null, reserve_pct: 20};
@@ -1043,14 +1071,16 @@ aside.addEventListener('click', e => {
   if (b.dataset.open) return openSaved(b.dataset.open);
   if (b.dataset.del) return deleteSaved(b);
   if (b.dataset.reset) return resetSection(b.dataset.reset);
+  if (b.dataset.frame) return setFrame(b.dataset.fk, b.dataset.frame);
   if (b.dataset.act === 'help') return toggleHelp(true);
-  if (b.dataset.act === 'compare' || b.dataset.act === 'library') {
+  if (b.dataset.act === 'compare' || b.dataset.act === 'library' || b.dataset.act === 'frames') {
     S.view = b.dataset.act; renderWork(); $('#workwrap').scrollIntoView({block:'start', behavior:'smooth'}); return;
   }
   if (b.dataset.seg) {
     vals()[b.dataset.seg] = b.dataset.v;
     $$('button', b.parentElement).forEach(x => x.setAttribute('aria-pressed', x === b));
     persist();
+    if (b.dataset.seg === 'n_motors') renderAside();   // frame layouts depend on the motor count
   } else if ((b.dataset.kind || b.dataset.mode) && !S.busy) {
     if (b.dataset.kind) S.kind = b.dataset.kind; else S.mode = b.dataset.mode;
     persist(); renderAside(); run();
@@ -1160,33 +1190,93 @@ function scaleBar(W, H, N) {
 }
 const angDist = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
-function drawMulti(n, D_in, P_in, wb) {
+/* ---------------- frame layouts ---------------- */
+const FRAMES = {
+  4: [
+    {id:'x', short:'X', name:'Quad X', desc:'Motors on the diagonals. Handles the same in every direction and is the most common layout.', uses:'Freestyle, racing, photography, general use'},
+    {id:'plus', short:'+', name:'Quad +', desc:'One motor points straight ahead. Simple to set up, but the front propeller sits in a forward camera’s view.', uses:'Training, research, indoor flying'},
+    {id:'h', short:'H', name:'Quad H', desc:'Motors on two side rails with a long body between them, leaving room for batteries and payload along the centre.', uses:'Long-range FPV, camera platforms'},
+    {id:'deadcat', short:'Deadcat', name:'Deadcat', desc:'Front arms swept wide so the propellers stay out of a forward camera’s view. Needs longer arms to keep the rear props apart.', uses:'Cinematic FPV, forward-camera inspection'},
+  ],
+  6: [
+    {id:'x', short:'X', name:'Hex X', desc:'Six arms with a pair facing forward. Many flight controllers can keep a hexacopter flying after one motor fails.', uses:'Heavy lift, mapping, spraying'},
+    {id:'plus', short:'+', name:'Hex +', desc:'One arm points straight ahead. Same lift as Hex X with different camera clearance.', uses:'Survey, aerial photography'},
+    {id:'y6', short:'Y6', name:'Y6 coaxial', desc:'Three arms with two stacked motors on each. Six-motor lift in a compact frame, but stacked rotors usually lose some efficiency.', uses:'Portable heavy lift, folding frames'},
+  ],
+  8: [
+    {id:'x', short:'X', name:'Octo X', desc:'Eight arms for maximum lift and motor redundancy.', uses:'Cinema cameras, heavy payloads'},
+    {id:'plus', short:'+', name:'Octo +', desc:'One arm points straight ahead. Same lift as Octo X.', uses:'Heavy lift, survey'},
+    {id:'x8', short:'X8', name:'X8 coaxial', desc:'Four arms with stacked motor pairs: octocopter redundancy in a quad-sized footprint, with some efficiency loss.', uses:'Heavy lift where space is tight'},
+  ],
+  fw: [
+    {id:'conv', short:'Conventional', name:'Conventional', desc:'Wing forward, tailplane and fin at the back. Stable and forgiving.', uses:'Training, mapping, general flying'},
+    {id:'vtail', short:'V-tail', name:'V-tail', desc:'Two angled tail surfaces replace the tailplane and fin, saving some weight and drag. The flight controller mixes the controls.', uses:'Long-range, mapping'},
+    {id:'wing', short:'Flying wing', name:'Flying wing', desc:'No tail: a swept wing with elevons does everything. Efficient and fast, but sensitive to centre of gravity.', uses:'Long-range, high-speed survey'},
+  ],
+};
+const frameKey = (kind, n) => kind === 'multirotor' ? Number(n) : 'fw';
+function frameFor(kind, n) {
+  const k = frameKey(kind, n), list = FRAMES[k] || FRAMES[4];
+  return (list.find(f => f.id === S.frames[k]) || list[0]).id;
+}
+const frameInfo = (kind, n, id) => (FRAMES[frameKey(kind, n)] || []).find(f => f.id === id) || {name: '', id};
+/* Motor positions for a multirotor layout, in mm (u = right, v = backward, front is -v).
+   The arm radius keeps neighbouring props 10% apart, which matches the physics model's wheelbase for X and + layouts. */
+function frameLayout(n, frame, Dmm) {
+  const coax = frame === 'y6' || frame === 'x8';
+  let angs;
+  if (frame === 'y6') angs = [-150, -30, 90];
+  else if (frame === 'x8') angs = [-135, -45, 45, 135];
+  else if (frame === 'plus') angs = [...Array(n)].map((_, i) => -90 + i * 360 / n);
+  else if (frame === 'deadcat' && n === 4) angs = [-148, -32, 54, 126];
+  else angs = [...Array(n)].map((_, i) => -90 + (i + .5) * 360 / n);
+  const sorted = angs.map(a => (a % 360 + 360) % 360).sort((a, b) => a - b);
+  let gap = 360;
+  sorted.forEach((a, i) => { gap = Math.min(gap, (i === sorted.length - 1 ? sorted[0] + 360 : sorted[i + 1]) - a); });
+  const R = 1.1 * Dmm / (2 * Math.sin(gap / 2 * Math.PI / 180));
+  const motors = angs.map(d => {
+    const a = d * Math.PI / 180, u = Math.cos(a) * R, v = Math.sin(a) * R;
+    return {u, v, a, anchor: frame === 'h' ? [u, 0] : [0, 0]};
+  });
+  return {R, wb: 2 * R, motors, coax, rails: frame === 'h'};
+}
+
+function drawMulti(n, D_in, P_in, frame = 'x') {
   const W = 600, H = 440, cx = 300, cy = 220;
-  const R = wb / 2, pr = D_in * 25.4 / 2, ext = R + pr, N = niceScale(ext / 168), s = 1 / N;
+  const lay = frameLayout(n, frame, D_in * 25.4);
+  const R = lay.R, wb = lay.wb, pr = D_in * 25.4 / 2, ext = R + pr, N = niceScale(ext / 168), s = 1 / N;
   const Rs = R * s, ps = pr * s, E = ext * s;
-  const bw = clamp(Rs * .46, 30, 84), bh = bw * 1.3, aw = clamp(Rs * .075, 5, 12), mr = clamp(ps * .17, 4.5, 15), fs = bw * .34;
-  const pts = [...Array(n)].map((_, i) => { const a = (i + .5) * 2 * Math.PI / n - Math.PI / 2; return {x: cx + Math.cos(a) * Rs, y: cy + Math.sin(a) * Rs, a}; });
+  const bw = clamp(Rs * .46, 30, 84), bh = bw * (lay.rails ? 1.7 : 1.3), aw = clamp(Rs * .075, 5, 12), mr = clamp(ps * .17, 4.5, 15), fs = bw * .34;
+  const pts = lay.motors.map(m => {
+    const x = cx + m.u * s, y = cy + m.v * s, ax = cx + m.anchor[0] * s, ay = cy + m.anchor[1] * s;
+    return {x, y, a: m.a, ax, ay, arm: Math.atan2(y - ay, x - ax)};
+  });
   const near = deg => pts.reduce((b, p) => angDist(p.a, deg * Math.PI / 180) < angDist(b.a, deg * Math.PI / 180) ? p : b);
   const at = (deg, r) => [cx + Math.cos(deg * Math.PI / 180) * r, cy + Math.sin(deg * Math.PI / 180) * r];
-  const escPos = p => [cx + (p.x - cx) * .56, cy + (p.y - cy) * .56];
+  const escPos = p => [p.ax + (p.x - p.ax) * .56, p.ay + (p.y - p.ay) * .56];
   let o = '';
   o += `<line class="ctr" x1="${r1(cx - E - 16)}" y1="${cy}" x2="${r1(cx + E + 16)}" y2="${cy}"/><line class="ctr" x1="${cx}" y1="${r1(cy - E - 16)}" x2="${cx}" y2="${r1(cy + E + 16)}"/>`;
   o += `<circle class="ctr" cx="${cx}" cy="${cy}" r="${r1(Rs)}"/>`;
   o += `<g data-item="3">${pts.map(p => `<circle class="ph" cx="${r1(p.x)}" cy="${r1(p.y)}" r="${r1(ps)}"/>`).join('')}</g>`;
+  const ux = Math.max(...pts.map(p => Math.abs(p.x - cx)));
+  const rails = lay.rails ? [-1, 1].map(sg => `<rect class="ln f" pathLength="1" x="${r1(cx - ux)}" y="${r1(cy + sg * bh * .3 - aw / 2)}" width="${r1(ux * 2)}" height="${r1(aw)}"/>`).join('') : '';
   o += `<g data-item="1">${pts.map(p => {
-      const qx = -Math.sin(p.a) * aw / 2, qy = Math.cos(p.a) * aw / 2;
-      return `<path class="ln f" pathLength="1" d="M${P(cx + qx, cy + qy)} L${P(p.x + qx, p.y + qy)} L${P(p.x - qx, p.y - qy)} L${P(cx - qx, cy - qy)}Z"/>`;
-    }).join('')}<rect class="ln f" pathLength="1" x="${r1(cx - bw / 2)}" y="${r1(cy - bh / 2)}" width="${r1(bw)}" height="${r1(bh)}" rx="${r1(bw * .14)}"/></g>`;
+      const qx = -Math.sin(p.arm) * aw / 2, qy = Math.cos(p.arm) * aw / 2;
+      return `<path class="ln f" pathLength="1" d="M${P(p.ax + qx, p.ay + qy)} L${P(p.x + qx, p.y + qy)} L${P(p.x - qx, p.y - qy)} L${P(p.ax - qx, p.ay - qy)}Z"/>`;
+    }).join('')}${rails}<rect class="ln f" pathLength="1" x="${r1(cx - bw / 2)}" y="${r1(cy - bh / 2)}" width="${r1(bw)}" height="${r1(bh)}" rx="${r1(bw * .14)}"/></g>`;
   o += `<g data-item="5"><rect class="hid" x="${r1(cx - bw * .31)}" y="${r1(cy - bh * .38)}" width="${r1(bw * .62)}" height="${r1(bh * .76)}" rx="2"/></g>`;
   o += `<g data-item="6"><rect class="ln f" pathLength="1" x="${r1(cx - fs / 2)}" y="${r1(cy - fs / 2)}" width="${r1(fs)}" height="${r1(fs)}" rx="1.5"/>
     <path class="ln" pathLength="1" d="M${P(cx, cy - fs * .3)} L${P(cx + fs * .2, cy + fs * .14)} L${P(cx - fs * .2, cy + fs * .14)}Z"/></g>`;
   const el = clamp(Rs * .16, 10, 26), ew = aw * 1.7;
   o += `<g data-item="4">${pts.map(p => { const [ex, ey] = escPos(p);
-      return `<rect class="ln f" pathLength="1" x="${r1(-el / 2)}" y="${r1(-ew / 2)}" width="${r1(el)}" height="${r1(ew)}" rx="1" transform="translate(${P(ex, ey)}) rotate(${r1(p.a * 180 / Math.PI)})"/>`; }).join('')}</g>`;
-  o += `<g data-item="2">${pts.map(p => `<circle class="ln f" pathLength="1" cx="${r1(p.x)}" cy="${r1(p.y)}" r="${r1(mr)}"/>`).join('')}</g>`;
+      return `<rect class="ln f" pathLength="1" x="${r1(-el / 2)}" y="${r1(-ew / 2)}" width="${r1(el)}" height="${r1(ew)}" rx="1" transform="translate(${P(ex, ey)}) rotate(${r1(p.arm * 180 / Math.PI)})"/>`; }).join('')}</g>`;
+  o += `<g data-item="2">${pts.map(p => `<circle class="ln f" pathLength="1" cx="${r1(p.x)}" cy="${r1(p.y)}" r="${r1(mr)}"/>`
+    + (lay.coax ? `<circle class="ln" pathLength="1" cx="${r1(p.x)}" cy="${r1(p.y)}" r="${r1(mr * .62)}"/>` : '')).join('')}</g>`;
   const L = ps * .94, w = ps * .12;
+  const blade = `M0,0 Q${r1(L * .5)},${r1(-w)} ${r1(L)},0 Q${r1(L * .5)},${r1(w * .35)} 0,0Z M0,0 Q${r1(-L * .5)},${r1(w)} ${r1(-L)},0 Q${r1(-L * .5)},${r1(-w * .35)} 0,0Z`;
   o += `<g data-item="3">${pts.map((p, i) => `<g transform="translate(${P(p.x, p.y)}) rotate(${(i * 47 + 20) % 180})">
-      <path class="ln f" pathLength="1" d="M0,0 Q${r1(L * .5)},${r1(-w)} ${r1(L)},0 Q${r1(L * .5)},${r1(w * .35)} 0,0Z M0,0 Q${r1(-L * .5)},${r1(w)} ${r1(-L)},0 Q${r1(-L * .5)},${r1(-w * .35)} 0,0Z"/>
+      ${lay.coax ? `<path class="hid" d="${blade}" transform="rotate(70)"/>` : ''}
+      <path class="ln f" pathLength="1" d="${blade}"/>
       <circle class="ln f" pathLength="1" r="${r1(mr * .42)}"/></g>`).join('')}</g>`;
   // dimensions
   const [pcx, pcy] = at(155, Rs), [pqx, pqy] = at(155, E + 18);
@@ -1203,10 +1293,13 @@ function drawMulti(n, D_in, P_in, wb) {
   o += B(4, ex, ey, 116);
   o += B(5, cx - bw * .31, cy + bh * .3, 92);
   o += `<text class="lbl" x="12" y="${H - 10}">PLAN VIEW · SCALE 1:${N}</text>` + scaleBar(W, H, N);
-  return {svg: `<svg class="dwg plot" viewBox="0 0 ${W} ${H}" role="img" aria-label="Plan view of a ${n}-rotor with ${fmt(wb, 0)} mm wheelbase">${DEFS}${o}</svg>`, N};
+  const fname = frameInfo('multirotor', n, frame).name || `${n}-rotor`;
+  return {svg: `<svg class="dwg plot" viewBox="0 0 ${W} ${H}" role="img" aria-label="Plan view of a ${esc(fname)} with ${fmt(wb, 0)} mm wheelbase">${DEFS}${o}</svg>`, N, wb};
 }
 
-function drawFixed(span_m, AR, D_in, P_in) {
+function drawFixed(span_m, AR, D_in, P_in, layout = 'conv') {
+  if (layout === 'wing') return drawFlyingWing(span_m, AR, D_in, P_in);
+  const vtail = layout === 'vtail';
   const W = 600, H = 440, cx = 300;
   const b = span_m * 1000, c = b / AR, cr = c * 1.25, ct = c * .75, L = clamp(b * .62, c * 5, b * 1.1);
   const N = niceScale(Math.max(b / 460, L / 320)), s = 1 / N;
@@ -1214,7 +1307,7 @@ function drawFixed(span_m, AR, D_in, P_in) {
   const wy = top + Ls * .24, sw = (CR - CT) * .45;
   const xL = t => cx - t * Bs / 2, xR = t => cx + t * Bs / 2;
   const le = t => wy + sw * t, ch = t => CR + (CT - CR) * t, te = t => le(t) + ch(t), hinge = t => le(t) + ch(t) * .72;
-  const hs = Math.max(Bs * .3, 50), hc = Math.max(CR * .62, 10), ty = top + Ls - hc - 1;
+  const hs = Math.max(Bs * .3, 50) * (vtail ? .82 : 1), hc = Math.max(CR * .62, 10), ty = top + Ls - hc - 1;
   const Pw = D_in * 25.4 * s;
   let o = '';
   o += `<line class="ctr" x1="${cx}" y1="${r1(top - 18)}" x2="${cx}" y2="${r1(top + Ls + 14)}"/>`;
@@ -1225,7 +1318,9 @@ function drawFixed(span_m, AR, D_in, P_in) {
   const fus = `M${P(cx - fw * .38, top + 6)} Q${P(cx, top - 3)} ${P(cx + fw * .38, top + 6)} L${P(cx + fw / 2, top + Ls * .3)} L${P(cx + fw * .16, top + Ls)} L${P(cx - fw * .16, top + Ls)} L${P(cx - fw / 2, top + Ls * .3)}Z`;
   o += `<g data-item="1"><path class="ln f" pathLength="1" d="${wing}"/><path class="ln thin" pathLength="1" d="${ail(1)}"/><path class="ln thin" pathLength="1" d="${ail(-1)}"/>
     <path class="ln f" pathLength="1" d="${tail}"/><path class="ln f" pathLength="1" d="${fus}"/>
-    <rect class="ln f fin" pathLength="1" x="${r1(cx - 1.8)}" y="${r1(ty - hc * .45)}" width="3.6" height="${r1(top + Ls - ty + hc * .45)}"/></g>`;
+    ${vtail
+      ? `<path class="ln thin" pathLength="1" d="M${P(cx - hs / 2, ty + hc * .68)} L${P(cx + hs / 2, ty + hc * .68)}"/>`
+      : `<rect class="ln f fin" pathLength="1" x="${r1(cx - 1.8)}" y="${r1(ty - hc * .45)}" width="3.6" height="${r1(top + Ls - ty + hc * .45)}"/>`}</g>`;
   const mh = Math.max(8, Ls * .05), eh = Math.max(10, Ls * .06), bh = Math.max(16, Ls * .15), fh = Math.max(8, Ls * .05);
   const my = top + 3, ey = my + mh + 4, by = wy - Ls * .04, fy = wy + CR + 6;
   o += `<g data-item="2"><rect class="hid" x="${r1(cx - fw * .3)}" y="${r1(my)}" width="${r1(fw * .6)}" height="${r1(mh)}"/></g>`;
@@ -1249,7 +1344,49 @@ function drawFixed(span_m, AR, D_in, P_in) {
   const right = spread([{i:4, x:cx + fw * .27, y:ey + eh / 2}, {i:5, x:cx + fw * .36, y:by + bh / 2}, {i:6, x:cx + fw * .28, y:fy + fh / 2}], 18, H - 34, 28);
   o += left.map(q => balloon(q.i, q.x, q.y, 24, q.by)).join('') + right.map(q => balloon(q.i, q.x, q.y, W - 24, q.by)).join('');
   o += `<text class="lbl" x="12" y="${H - 10}">PLAN VIEW · SCALE 1:${N}</text>` + scaleBar(W, H, N);
-  return {svg: `<svg class="dwg plot" viewBox="0 0 ${W} ${H}" role="img" aria-label="Plan view of a fixed-wing with ${fmt(span_m, 2)} m span">${DEFS}${o}</svg>`, N};
+  if (vtail) o += callout(cx + hs / 2, ty + hc * .6, cx + hs / 2 + 28, ty + hc * .6 + 22, 1, 'V-TAIL 110°');
+  return {svg: `<svg class="dwg plot" viewBox="0 0 ${W} ${H}" role="img" aria-label="Plan view of a ${vtail ? 'V-tail' : 'conventional'} fixed-wing with ${fmt(span_m, 2)} m span">${DEFS}${o}</svg>`, N};
+}
+
+/* Flying wing: swept wing with elevons and winglets, a short centre pod and a pusher propeller. */
+function drawFlyingWing(span_m, AR, D_in, P_in) {
+  const W = 600, H = 440, cx = 300;
+  const b = span_m * 1000, c = b / AR, cr = c * 1.35, ct = c * .65, swMm = b / 2 * Math.tan(28 * Math.PI / 180);
+  const lenMm = swMm + ct + cr * .25;
+  const N = niceScale(Math.max(b / 460, lenMm / 300)), s = 1 / N;
+  const Bs = b * s, CR = cr * s, CT = ct * s, SW = swMm * s, wy = (H - lenMm * s) / 2 + 4;
+  const xL = t => cx - t * Bs / 2, xR = t => cx + t * Bs / 2;
+  const le = t => wy + SW * t, ch = t => CR + (CT - CR) * t, te = t => le(t) + ch(t), hinge = t => le(t) + ch(t) * .74;
+  const pw = Math.max(14, CR * .32), podTop = wy - CR * .12, podEnd = wy + CR * 1.02, Pw = D_in * 25.4 * s;
+  let o = `<line class="ctr" x1="${cx}" y1="${r1(podTop - 16)}" x2="${cx}" y2="${r1(te(1) + 16)}"/>`;
+  const wing = `M${P(cx, wy)} L${P(xR(1), le(1))} L${P(xR(1), te(1))} L${P(cx, wy + CR)} L${P(xL(1), te(1))} L${P(xL(1), le(1))}Z`;
+  const elev = side => { const x = side > 0 ? xR : xL;
+    return `M${P(x(.18), te(.18))} L${P(x(.18), hinge(.18))} L${P(x(.92), hinge(.92))} L${P(x(.92), te(.92))}`; };
+  const pod = `M${P(cx - pw * .42, podTop + 8)} Q${P(cx, podTop - 2)} ${P(cx + pw * .42, podTop + 8)} L${P(cx + pw / 2, podEnd - 10)} L${P(cx + pw * .3, podEnd)} L${P(cx - pw * .3, podEnd)} L${P(cx - pw / 2, podEnd - 10)}Z`;
+  const tip = x => `<rect class="ln f fin" pathLength="1" x="${r1(x - 1.8)}" y="${r1(le(1) + CT * .15)}" width="3.6" height="${r1(CT * .85)}"/>`;
+  o += `<g data-item="1"><path class="ln f" pathLength="1" d="${wing}"/><path class="ln thin" pathLength="1" d="${elev(1)}"/><path class="ln thin" pathLength="1" d="${elev(-1)}"/>
+    <path class="ln f" pathLength="1" d="${pod}"/>${tip(xL(1))}${tip(xR(1))}</g>`;
+  const fh = Math.max(8, CR * .12), bh = Math.max(16, CR * .35), eh = Math.max(8, CR * .12), mh = Math.max(8, CR * .12);
+  const fy = podTop + 10, by = fy + fh + 4, ey = podEnd - mh - eh - 8, my = podEnd - mh - 3;
+  o += `<g data-item="6"><rect class="hid" x="${r1(cx - pw * .28)}" y="${r1(fy)}" width="${r1(pw * .56)}" height="${r1(fh)}"/></g>`;
+  o += `<g data-item="5"><rect class="hid" x="${r1(cx - pw * .36)}" y="${r1(by)}" width="${r1(pw * .72)}" height="${r1(bh)}"/></g>`;
+  o += `<g data-item="4"><rect class="hid" x="${r1(cx - pw * .27)}" y="${r1(ey)}" width="${r1(pw * .54)}" height="${r1(eh)}"/></g>`;
+  o += `<g data-item="2"><rect class="hid" x="${r1(cx - pw * .3)}" y="${r1(my)}" width="${r1(pw * .6)}" height="${r1(mh)}"/></g>`;
+  const sv = x => `<rect class="hid" x="${r1(x - 5)}" y="${r1(hinge(.55) - 10)}" width="10" height="7"/>`;
+  o += `<g data-item="7">${sv(xL(.55))}${sv(xR(.55))}</g>`;
+  o += `<g data-item="3"><rect class="ln f" pathLength="1" x="${r1(cx - Pw / 2)}" y="${r1(podEnd + 4)}" width="${r1(Pw)}" height="3.4" rx="1.5"/></g>`;
+  const yd = te(1) + 22;
+  o += `<g class="dimg"><line class="dim" x1="${r1(xL(1))}" y1="${r1(te(1) + 3)}" x2="${r1(xL(1))}" y2="${r1(yd + 6)}"/>
+    <line class="dim" x1="${r1(xR(1))}" y1="${r1(te(1) + 3)}" x2="${r1(xR(1))}" y2="${r1(yd + 6)}"/>
+    <line class="dim" marker-start="url(#ah)" marker-end="url(#ah)" x1="${r1(xL(1))}" y1="${r1(yd)}" x2="${r1(xR(1))}" y2="${r1(yd)}"/>
+    <text class="dimt" x="${r1(cx + Bs / 4)}" y="${r1(yd - 5)}" text-anchor="middle">${fmt(b, 0)} SPAN</text></g>`;
+  o += callout(cx + Pw / 2, podEnd + 5.7, cx + Pw / 2 + 26, podEnd + 26, 1, `Ø${fmt(D_in, 1)} × ${fmt(P_in, 1)} PUSHER`);
+  o += callout(xR(.55), le(.55), xR(.55) + 24, le(.55) - 26, 1, `MEAN CHORD ${fmt(c, 0)} · SWEEP 28°`);
+  const left = spread([{i:1, x:xL(.35), y:le(.35) + ch(.35) * .4}, {i:7, x:xL(.55) - 5, y:hinge(.55) - 6.5}, {i:3, x:cx - Pw / 2, y:podEnd + 5.7}], 18, H - 34, 28);
+  const right = spread([{i:6, x:cx + pw * .28, y:fy + fh / 2}, {i:5, x:cx + pw * .36, y:by + bh / 2}, {i:4, x:cx + pw * .27, y:ey + eh / 2}, {i:2, x:cx + pw * .3, y:my + mh / 2}], 18, H - 34, 28);
+  o += left.map(q => balloon(q.i, q.x, q.y, 24, q.by)).join('') + right.map(q => balloon(q.i, q.x, q.y, W - 24, q.by)).join('');
+  o += `<text class="lbl" x="12" y="${H - 10}">PLAN VIEW · SCALE 1:${N}</text>` + scaleBar(W, H, N);
+  return {svg: `<svg class="dwg plot" viewBox="0 0 ${W} ${H}" role="img" aria-label="Plan view of a flying wing with ${fmt(span_m, 2)} m span">${DEFS}${o}</svg>`, N};
 }
 
 /* ---------------- sheet ---------------- */
@@ -1320,8 +1457,9 @@ function bomTable(rows) {
 function bomRows(kind, x, s, extra) {
   const multi = kind === 'multirotor', n = multi ? x.n_motors : 1;
   const rows = multi
-    ? [[1, 1, 'Frame', `${n}-arm, ${fmt(s.wheelbase_mm, 0)} mm wheelbase`]]
-    : [[1, 1, 'Airframe', `${fmt(x.span_m, 2)} m span, aspect ratio ${fmt(x.aspect, 1)}`, `Wing area ${fmt(x.span_m ** 2 / x.aspect, 2)} m² · mean chord ${fmt(x.span_m / x.aspect * 1000, 0)} mm`]];
+    ? [[1, 1, 'Frame', `${extra.frameName || n + '-arm'}, ${fmt(extra.wb ?? s.wheelbase_mm, 0)} mm wheelbase`,
+        extra.coax ? `${n / 2} arms, two stacked motors on each` : '']]
+    : [[1, 1, 'Airframe', `${extra.frameName ? extra.frameName + ', ' : ''}${fmt(x.span_m, 2)} m span, aspect ratio ${fmt(x.aspect, 1)}`, `Wing area ${fmt(x.span_m ** 2 / x.aspect, 2)} m² · mean chord ${fmt(x.span_m / x.aspect * 1000, 0)} mm`]];
   rows.push([2, n, 'Motor', `${fmt(x.kv, 0)} KV, ${extra.motor_class} class`, `Up to ${fmt(s.motor_max_w, 0)} W${multi ? ' each' : ''}`]);
   rows.push([3, n, 'Propeller', `${fmt(x.D_in, 1)} × ${fmt(x.P_in, 1)} in`, multi ? `${n / 2} CW, ${n / 2} CCW` : 'Tractor, nose-mounted']);
   rows.push([4, n, 'ESC', `${fmt(s.esc_rating_a, 0)} A or higher`]);
@@ -1331,6 +1469,10 @@ function bomRows(kind, x, s, extra) {
   return rows;
 }
 
+function frameNote(f) {
+  const coax = f.id === 'y6' || f.id === 'x8';
+  return `Frame layout: ${f.name}. Layout changes the drawing, 3D model and parts list; flight numbers come from motor count, props, battery and payload${coax ? '. Stacked rotors usually lose some efficiency that the model does not include' : ''}.`;
+}
 function condNote(c) {
   return `Performance at ${condText(c)}. Flight time lands with ${fmt(c.reserve_pct, 0)}% battery left.`;
 }
@@ -1338,6 +1480,7 @@ function renderWork() {
   dispose3D();
   if (S.view === 'compare') return renderCompare();
   if (S.view === 'library') return renderLibrary();
+  if (S.view === 'frames') return renderFrames();
   const R = S.result;
   if (!R) return;
   if (!R.data.ok) return renderFail(R);
@@ -1397,7 +1540,8 @@ const condShort = c => `${fmt(c.alt_m, 0)} m, ${fmt(c.temp_c, 0)} °C, land at $
 
 function renderDesign(R) {
   const {data, req, sel} = R, multi = data.kind === 'multirotor', o = data.options[sel], cnt = data.options.length;
-  const dw = multi ? drawMulti(o.n_motors, o.D_in, o.P_in, o.wheelbase_mm) : drawFixed(o.span_m, o.aspect, o.D_in, o.P_in);
+  const frame = frameFor(data.kind, o.n_motors), finfo = frameInfo(data.kind, o.n_motors, frame);
+  const dw = multi ? drawMulti(o.n_motors, o.D_in, o.P_in, frame) : drawFixed(o.span_m, o.aspect, o.D_in, o.P_in, frame);
   const tabs = `<div class="opts" role="tablist" aria-label="Design options">${data.options.map((x, i) => `<button type="button" role="tab" aria-selected="${i === sel}" data-opt="${i}">
       <span class="on">Option ${i + 1}</span><span class="os">${fmt(x.flight_min, multi ? 1 : 0)} min · ${fmt(x.auw_kg, 2)} kg · ${x.cells}S ${fmt(x.mah, 0)} mAh</span></button>`).join('')}</div>`;
   const title = `${multi ? CRAFT(o.n_motors) : 'Fixed-wing'}, ${fmt(req.payload_kg, 1)} kg payload`;
@@ -1408,10 +1552,11 @@ function renderDesign(R) {
           : `Wing area ${fmt(o.wing_area_m2, 2)} m². Cruise is set at 1.5 × stall speed (${fmt(o.cruise_speed_ms, 1)} m/s).`,
     `Hidden lines show internal parts. Balloons match the bill of materials.`,
     condNote(data.conditions),
+    frameNote(finfo),
   ].concat(data.conditions.rho !== 1.225 ? ['ML screening does not account for altitude or temperature. Every option was rechecked with physics at these conditions.'] : []);
   const stamp = '';
-  const bom = bomRows(data.kind, o, o, o);
-  S.cur = {kind: data.kind, parts: partsOf(data.kind, o), metrics: metricsOf(o), name: `${title} · ${dwg}`, dwg, bom, title,
+  const bom = bomRows(data.kind, o, o, {...o, frameName: finfo.name, wb: dw.wb, coax: frame === 'y6' || frame === 'x8'});
+  S.cur = {kind: data.kind, parts: partsOf(data.kind, o), metrics: metricsOf(o), name: `${title} · ${dwg}`, dwg, bom, title, frame,
     env: req.env, cond: data.conditions, ok: true, verdict: 'Physics check passed', sheetNo: `${sel + 1} of ${cnt}`};
   const rows = perfRows(data.kind, o, req.min_flight_min);
   const head = resultHead(`${cnt} design${cnt > 1 ? 's' : ''} found`,
@@ -1435,10 +1580,11 @@ const METRIC = {
 function renderCheck(R) {
   const d = R.data, multi = d.kind === 'multirotor', s = d.physics, p = d.parts;
   const prob = d.ml_feasible_prob, ok = d.physics_feasible && prob > .5;
-  const dw = multi ? drawMulti(p.n_motors, p.D_in, p.P_in, s.wheelbase_mm) : drawFixed(p.span_m, p.aspect, p.D_in, p.P_in);
+  const frame = frameFor(d.kind, p.n_motors), finfo = frameInfo(d.kind, p.n_motors, frame);
+  const dw = multi ? drawMulti(p.n_motors, p.D_in, p.P_in, frame) : drawFixed(p.span_m, p.aspect, p.D_in, p.P_in, frame);
   const ft = d.metrics.find(m => m.name === 'flight_min');
   const agree = ft ? Math.abs(ft.ml - ft.physics) / ft.physics * 100 : null;
-  const notes = ['Dimensions in mm unless noted. Propellers as diameter × pitch in inches.', condNote(d.conditions)]
+  const notes = ['Dimensions in mm unless noted. Propellers as diameter × pitch in inches.', condNote(d.conditions), frameNote(finfo)]
     .concat(d.tips.length ? d.tips.map(t => esc(t.charAt(0).toUpperCase() + t.slice(1).replace(' -> ', ': '))) : ['No problems found against the physics limits.'])
     .concat(agree != null ? [`ML model and physics agree on flight time within ${fmt(agree, 1)}%.`] : []);
   const stamp = '';
@@ -1453,8 +1599,8 @@ function renderCheck(R) {
     </tbody></table></div>`;
   const extra = {motor_class: d.motor_class, battery_c: Math.max(multi ? 25 : 20, Math.ceil(s.battery_c_needed * 1.1)),
     avionics: multi ? (s.wheelbase_mm > 350 || p.payload_kg > .3 ? 'ArduPilot or PX4 with GPS' : 'Betaflight or INAV F4/F7') : 'ArduPilot or INAV plane with GPS'};
-  const bom = bomRows(d.kind, p, s, extra);
-  S.cur = {kind: d.kind, parts: p, metrics: metricsOf(s), name: `${title} · ${dwg}`, dwg, bom, title,
+  const bom = bomRows(d.kind, p, s, {...extra, frameName: finfo.name, wb: dw.wb, coax: frame === 'y6' || frame === 'x8'});
+  S.cur = {kind: d.kind, parts: p, metrics: metricsOf(s), name: `${title} · ${dwg}`, dwg, bom, title, frame,
     env: R.req.env, cond: d.conditions, ok, verdict: ok ? 'Feasible' : 'Not feasible', sheetNo: '1 of 1', mlProb: prob};
   const rows = perfRows(d.kind, s, multi ? 2 : 3);
   const spec = multi ? `${p.n_motors} × ${fmt(p.kv, 0)} KV · ${fmt(p.D_in, 1)} × ${fmt(p.P_in, 1)} in props` : `${fmt(p.span_m, 2)} m span · ${fmt(p.kv, 0)} KV · ${fmt(p.D_in, 1)} × ${fmt(p.P_in, 1)} in prop`;
@@ -1727,8 +1873,8 @@ function presetSpec(pr) {
 function presetDrawing(pr) {
   const p = pr.parts;
   return pr.kind === 'multirotor'
-    ? drawMulti(p.n_motors, p.D_in, p.P_in, p.D_in * 25.4 / Math.sin(Math.PI / p.n_motors) * 1.1).svg
-    : drawFixed(p.span_m, p.aspect, p.D_in, p.P_in).svg;
+    ? drawMulti(p.n_motors, p.D_in, p.P_in, pr.frame || 'x').svg
+    : drawFixed(p.span_m, p.aspect, p.D_in, p.P_in, pr.frame || 'conv').svg;
 }
 function presetMetrics(pr) {
   const r = LIB.results[pr.id];
@@ -1774,6 +1920,38 @@ async function loadLibrary() {
     const card = $(`#lc_${pr.id} .lc-mw`); if (card) card.innerHTML = presetMetrics(pr);
   }));
 }
+/* ---------------- frame layouts gallery ---------------- */
+function renderFrames() {
+  const groups = [[4, 'Quadcopters · 4 motors'], [6, 'Hexacopters · 6 motors'], [8, 'Octocopters · 8 motors'], ['fw', 'Fixed-wing airframes']];
+  const card = (fk, f) => {
+    const svg = fk === 'fw' ? drawFixed(2.0, 9, 11, 7, f.id).svg : drawMulti(fk, fk === 4 ? 10 : fk === 6 ? 15 : 13, 5, f.id).svg;
+    const current = (FRAMES[fk].find(x => x.id === S.frames[fk]) || FRAMES[fk][0]).id === f.id;
+    return `<article class="lc fc${current ? ' on' : ''}">
+      <div class="lc-top"><span class="tag">${fk === 'fw' ? 'Fixed-wing' : fk + ' motors'}</span>${current ? '<span class="lc-sel">Selected</span>' : ''}</div>
+      <div class="lc-draw">${svg}</div>
+      <h3>${esc(f.name)}</h3><p class="lc-d">${esc(f.desc)}</p>
+      <p class="lc-use"><b>Good for</b> ${esc(f.uses)}</p>
+      <button type="button" class="tbtn pri" data-useframe="${f.id}" data-fk="${fk}">Use this layout</button></article>`;
+  };
+  $('#work').innerHTML = `<div class="cmp-head"><div><h2>Frame layouts</h2>
+      <p>How the arms and motors, or the wing and tail, are arranged. The layout changes the drawing, 3D model and parts list.
+      Flight numbers come from motor count, props, battery and payload, so they are the same for every layout of the same size.</p></div>
+      <button type="button" class="tbtn" data-act="back">${icon('back')}Back to sheet</button></div>
+    ${groups.map(([fk, label]) => `<h3 class="h3 fgroup">${label}</h3><div class="lib">${FRAMES[fk].map(f => card(fk, f)).join('')}</div>`).join('')}`;
+}
+function useFrame(fkRaw, id) {
+  if (S.busy) return;
+  const fk = fkRaw === 'fw' ? 'fw' : Number(fkRaw), kind = fk === 'fw' ? 'fixedwing' : 'multirotor';
+  S.frames[fk] = id;
+  const name = frameInfo(kind, fk, id).name;
+  const same = S.result && S.result.data.ok && S.cur && S.cur.kind === kind && (fk === 'fw' || S.cur.parts.n_motors === fk);
+  if (same) { persist(); S.view = null; renderAside(); renderWork(); return toast(`Frame layout set to ${name}`); }
+  S.kind = kind; S.mode = 'check';
+  if (fk !== 'fw') vals().n_motors = String(fk);
+  persist(); renderAside(); run();
+  toast(`Checking a build with the ${name} layout`);
+}
+
 function openPreset(id) {
   const pr = PRESETS.find(p => p.id === id);
   if (pr && !S.busy) loadIntoCheck(pr.kind, pr.parts);
@@ -1860,12 +2038,13 @@ function build3D(T, stage, cur) {
   let ext, cy, cap;
 
   if (cur.kind === 'multirotor') {
-    const n = p.n_motors, wb = cur.metrics.wheelbase_mm || p.D_in * 25.4 / Math.sin(Math.PI / n) * 1.1;
-    const R = wb / 2, pr = p.D_in * 25.4 / 2;
-    const bw = Math.max(55, R * .42), bl = bw * 1.3, bh = Math.max(16, bw * .2);
+    const n = p.n_motors, frame = cur.frame || 'x', lay = frameLayout(n, frame, p.D_in * 25.4);
+    const R = lay.R, wb = lay.wb, pr = p.D_in * 25.4 / 2;
+    const bw = Math.max(55, R * .42), bl = bw * (lay.rails ? 1.75 : 1.3), bh = Math.max(16, bw * .2);
     const aw = Math.max(9, R * .06), ah = aw * .55, mr = Math.max(9, pr * .16), mh = mr * 1.1;
     const big = R > 150, pay = p.payload_kg > 0 ? clamp(42 * Math.cbrt(p.payload_kg), 26, 170) : 0;
-    const legH = big ? Math.max(40, R * .26, pay * 1.6 + 12) : 6;
+    const coaxH = lay.coax ? mh + 16 : 0;
+    const legH = (big ? Math.max(40, R * .26, pay * 1.6 + 12) : 6) + coaxH;
     const y0 = legH, armY = y0 + bh * .55;
     add(model, new T.BoxGeometry(bl, bh * .22, bw), M(C.plate), 0, y0 + bh * .11, 0);
     add(model, new T.BoxGeometry(bl * .92, bh * .22, bw * .92), M(C.plate), 0, y0 + bh * .89, 0);
@@ -1877,21 +2056,33 @@ function build3D(T, stage, cur) {
       add(model, new T.CylinderGeometry(2.5, 2.5, bw * .55, 8), M(C.metal, {m: .6, r: .35}), -bl * .38, y0 + bh + bw * .27, 0);
       add(model, new T.CylinderGeometry(bw * .15, bw * .15, 7, 24), M(C.frame), -bl * .38, y0 + bh + bw * .55, 0);
     }
-    for (let i = 0; i < n; i++) {
-      const a = (i + .5) * 2 * Math.PI / n - Math.PI / 2, x = -Math.sin(a) * R, z = Math.cos(a) * R, rot = Math.atan2(-z, x);
-      const along = d => [Math.cos(rot) * d, -Math.sin(rot) * d];
-      const [mx, mz] = along((R + bw * .3) / 2);
-      const arm = add(model, new T.BoxGeometry(R - bw * .3, ah, aw), M(C.frame, {r: .5}), mx, armY, mz); arm.rotation.y = rot;
-      const [ex, ez] = along(R * .56);
-      const esc = add(model, new T.BoxGeometry(R * .16, ah * .5, aw * 1.15), M(C.plate, {r: .7}), ex, armY + ah * .75, ez); esc.rotation.y = rot;
-      add(model, new T.CylinderGeometry(mr, mr, mh, 32), M(C.metal, {m: .7, r: .35}), x, armY + ah / 2 + mh / 2, z);
-      add(model, new T.CylinderGeometry(mr * .96, mr, mh * .28, 32), M(C.bell, {r: .45}), x, armY + ah / 2 + mh * .86, z);
-      const top = armY + ah / 2 + mh + 3;
-      const g = new T.Group(); g.position.set(x, top, z); g.rotation.y = i * 1.1; model.add(g);
+    const propAt = (x, y, z, dir, spin0) => {
+      const g = new T.Group(); g.position.set(x, y, z); g.rotation.y = spin0; model.add(g);
       for (const s of [1, -1]) { const bl1 = add(g, new T.BoxGeometry(pr * .92, 2.2, pr * .12), propMat, s * pr * .47, 0, 0); bl1.rotation.x = s * .22; }
       add(g, new T.CylinderGeometry(mr * .32, mr * .32, 8, 16), M(C.metal, {m: .6, r: .35}));
-      const disc = add(model, new T.CircleGeometry(pr, 48), discMat, x, top, z, false); disc.rotation.x = -Math.PI / 2;
-      props.push({g, axis: 'y', dir: i % 2 ? 1 : -1});
+      const disc = add(model, new T.CircleGeometry(pr, 48), discMat, x, y, z, false); disc.rotation.x = -Math.PI / 2;
+      props.push({g, axis: 'y', dir});
+    };
+    lay.motors.forEach((m, i) => {
+      // layout coordinates (u right, v back) -> 3D (x forward, z right)
+      const x = -m.v, z = m.u, ax = -m.anchor[1], az = m.anchor[0];
+      const dx = x - ax, dz = z - az, len = Math.hypot(dx, dz), rot = Math.atan2(-dz, dx);
+      const inner = lay.rails ? 0 : bw * .3, armLen = len - inner, mid = inner + armLen / 2;
+      const arm = add(model, new T.BoxGeometry(armLen, ah, aw), M(C.frame, {r: .5}), ax + dx / len * mid, armY, az + dz / len * mid); arm.rotation.y = rot;
+      const ed = len * .56;
+      const esc = add(model, new T.BoxGeometry(R * .16, ah * .5, aw * 1.15), M(C.plate, {r: .7}), ax + dx / len * ed, armY + ah * .75, az + dz / len * ed); esc.rotation.y = rot;
+      add(model, new T.CylinderGeometry(mr, mr, mh, 32), M(C.metal, {m: .7, r: .35}), x, armY + ah / 2 + mh / 2, z);
+      add(model, new T.CylinderGeometry(mr * .96, mr, mh * .28, 32), M(C.bell, {r: .45}), x, armY + ah / 2 + mh * .86, z);
+      propAt(x, armY + ah / 2 + mh + 3, z, i % 2 ? 1 : -1, i * 1.1);
+      if (lay.coax) {   // second motor hangs under the arm, spinning the other way
+        add(model, new T.CylinderGeometry(mr, mr, mh, 32), M(C.metal, {m: .7, r: .35}), x, armY - ah / 2 - mh / 2, z);
+        add(model, new T.CylinderGeometry(mr, mr * .96, mh * .28, 32), M(C.bell, {r: .45}), x, armY - ah / 2 - mh * .86, z);
+        propAt(x, armY - ah / 2 - mh - 3, z, i % 2 ? -1 : 1, i * 1.1 + 1.2);
+      }
+    });
+    if (lay.rails) {
+      const uMax = Math.max(...lay.motors.map(m => Math.abs(m.u)));
+      for (const sg of [1, -1]) add(model, new T.BoxGeometry(aw, ah, uMax * 2), M(C.frame, {r: .5}), sg * bl * .3, armY, 0);
     }
     if (big) for (const s of [1, -1]) {
       const zz = s * bw * .62;
@@ -1912,7 +2103,38 @@ function build3D(T, stage, cur) {
       }
     }
     ext = R + pr; cy = y0 + bh * .5;
-    cap = `${CRAFT(n)} · ${fmt(wb, 0)} mm wheelbase · ${fmt(p.D_in, 1)} in props`;
+    cap = `${frameInfo('multirotor', n, frame).name || CRAFT(n)} · ${fmt(wb, 0)} mm wheelbase · ${fmt(p.D_in, 1)} in props`;
+  } else if (cur.frame === 'wing') {
+    const b = p.span_m * 1000, AR = p.aspect, c = b / AR, cr = c * 1.35, ct = c * .65, sw = b / 2 * Math.tan(28 * Math.PI / 180);
+    const t = Math.max(6, cr * .1), rf = Math.max(cr * .16, 22), podH = p.payload_kg > 0 ? rf * .8 : 0, y0 = rf + 4 + podH;
+    const xLE = (sw + ct) / 2;
+    const ws = new T.Shape();
+    ws.moveTo(xLE, 0); ws.lineTo(xLE - sw, b / 2); ws.lineTo(xLE - sw - ct, b / 2); ws.lineTo(xLE - cr, 0);
+    ws.lineTo(xLE - sw - ct, -b / 2); ws.lineTo(xLE - sw, -b / 2); ws.closePath();
+    const wing = add(model, new T.ExtrudeGeometry(ws, {depth: t, bevelEnabled: true, bevelThickness: t * .35, bevelSize: Math.min(t * .5, 6), bevelSegments: 3}),
+      M(C.skin, {r: .45}), 0, y0 + t / 2, 0);
+    wing.rotation.x = Math.PI / 2;
+    const Lp = cr * 1.25, podX = xLE + cr * .12 - Lp / 2, prof = [];
+    for (let k = 0; k <= 32; k++) {
+      const u = k / 32, r = u < .2 ? rf * Math.sqrt(u / .2) : u < .6 ? rf : rf * (1 - .6 * (u - .6) / .4);
+      prof.push(new T.Vector2(Math.max(r, .5), Lp * (.5 - u)));
+    }
+    const pod = add(model, new T.LatheGeometry(prof, 32), M(C.skin, {r: .45, ds: true}), podX, y0, 0); pod.rotation.z = -Math.PI / 2;
+    for (const s of [1, -1]) {
+      const f = .55, le = xLE - sw * f, ch = cr + (ct - cr) * f;
+      add(model, new T.BoxGeometry(ch * .24, t * .4, b / 2 * .74), M(C.trim, {r: .5}), le - ch + ch * .13, y0 + t / 2 + t * .3, s * b / 2 * f);
+      const tl = xLE - sw, tt = tl - ct, fs = new T.Shape();
+      fs.moveTo(tl - ct * .15, 0); fs.lineTo(tt, 0); fs.lineTo(tt + ct * .12, ct * .7); fs.lineTo(tt + ct * .5, ct * .7); fs.closePath();
+      add(model, new T.ExtrudeGeometry(fs, {depth: 3, bevelEnabled: false}), M(C.skin, {r: .45}), 0, y0 + t / 2, s * b / 2 - 1.5);
+    }
+    const pr = p.D_in * 25.4 / 2, rearX = podX - Lp / 2 - 10, g = new T.Group(); g.position.set(rearX, y0, 0); model.add(g);
+    for (const s of [1, -1]) { const bl1 = add(g, new T.BoxGeometry(2.2, pr * .92, pr * .12), propMat, 0, s * pr * .47, 0); bl1.rotation.y = s * .22; }
+    const spinner = add(model, new T.ConeGeometry(rf * .5, rf, 24), M(C.trim, {r: .4}), rearX - rf * .4, y0, 0); spinner.rotation.z = Math.PI / 2;
+    const disc = add(model, new T.CircleGeometry(pr, 48), discMat, rearX, y0, 0, false); disc.rotation.y = Math.PI / 2;
+    props.push({g, axis: 'x', dir: 1});
+    if (podH) add(model, new T.BoxGeometry(Lp * .45, podH, rf * 1.1), M(C.frame, {r: .45}), podX, y0 - rf - podH / 2 + 2, 0);
+    ext = Math.max(b / 2, (sw + ct) / 2 + 40); cy = y0;
+    cap = `Flying wing · ${fmt(b, 0)} mm span · 28° sweep · ${fmt(p.D_in, 1)} in pusher prop`;
   } else {
     const b = p.span_m * 1000, AR = p.aspect, c = b / AR, cr = c * 1.25, ct = c * .75, L = clamp(b * .62, c * 5, b * 1.1);
     const rf = Math.max(L * .042, 20), podH = p.payload_kg > 0 ? rf * .9 : 0, y0 = rf + 4 + podH;
@@ -1934,12 +2156,21 @@ function build3D(T, stage, cur) {
       add(model, new T.BoxGeometry(ch * .26, t * .4, b / 2 * .44), M(C.trim, {r: .5}), le - ch + ch * .14, wy + t + t * .3, s * b / 2 * f);
     }
     const hs = Math.max(b * .3, 180), hc = Math.max(cr * .62, 50), tx = -L / 2 + hc + 8;
-    const ts = new T.Shape();
-    ts.moveTo(tx, 0); ts.lineTo(tx - hc * .3, hs / 2); ts.lineTo(tx - hc, hs / 2); ts.lineTo(tx - hc, -hs / 2); ts.lineTo(tx - hc * .3, -hs / 2); ts.closePath();
-    const tail = add(model, new T.ExtrudeGeometry(ts, {depth: 4, bevelEnabled: false}), M(C.skin, {r: .45}), 0, y0 + 6, 0); tail.rotation.x = Math.PI / 2;
-    const fh = hc * 1.25, fs = new T.Shape();
-    fs.moveTo(-L / 2, 0); fs.lineTo(-L / 2 + hc * 1.15, 0); fs.lineTo(-L / 2 + hc * .35, fh); fs.lineTo(-L / 2 + hc * .05, fh); fs.closePath();
-    add(model, new T.ExtrudeGeometry(fs, {depth: 4, bevelEnabled: false}), M(C.skin, {r: .45}), 0, y0, -2);
+    if (cur.frame === 'vtail') {   // two surfaces at 35° dihedral (110° between them)
+      for (const sg of [1, -1]) {
+        const half = hs * .82 / 2 * 1.15, sh = new T.Shape();
+        sh.moveTo(tx, 0); sh.lineTo(tx - hc * .3, sg * half); sh.lineTo(tx - hc, sg * half); sh.lineTo(tx - hc, 0); sh.closePath();
+        const vt = add(model, new T.ExtrudeGeometry(sh, {depth: 4, bevelEnabled: false}), M(C.skin, {r: .45, ds: true}), 0, y0 + 6, 0);
+        vt.rotation.x = Math.PI / 2 - sg * 35 * Math.PI / 180;
+      }
+    } else {
+      const ts = new T.Shape();
+      ts.moveTo(tx, 0); ts.lineTo(tx - hc * .3, hs / 2); ts.lineTo(tx - hc, hs / 2); ts.lineTo(tx - hc, -hs / 2); ts.lineTo(tx - hc * .3, -hs / 2); ts.closePath();
+      const tail = add(model, new T.ExtrudeGeometry(ts, {depth: 4, bevelEnabled: false}), M(C.skin, {r: .45}), 0, y0 + 6, 0); tail.rotation.x = Math.PI / 2;
+      const fh = hc * 1.25, fs = new T.Shape();
+      fs.moveTo(-L / 2, 0); fs.lineTo(-L / 2 + hc * 1.15, 0); fs.lineTo(-L / 2 + hc * .35, fh); fs.lineTo(-L / 2 + hc * .05, fh); fs.closePath();
+      add(model, new T.ExtrudeGeometry(fs, {depth: 4, bevelEnabled: false}), M(C.skin, {r: .45}), 0, y0, -2);
+    }
     const pr = p.D_in * 25.4 / 2, g = new T.Group(); g.position.set(L / 2 + 12, y0, 0); model.add(g);
     for (const s of [1, -1]) { const bl1 = add(g, new T.BoxGeometry(2.2, pr * .92, pr * .12), propMat, 0, s * pr * .47, 0); bl1.rotation.y = s * .22; }
     const spinner = add(model, new T.ConeGeometry(rf * .55, rf * 1.1, 24), M(C.trim, {r: .4}), L / 2 + 12 + rf * .45, y0, 0); spinner.rotation.z = -Math.PI / 2;
@@ -1947,7 +2178,7 @@ function build3D(T, stage, cur) {
     props.push({g, axis: 'x', dir: 1});
     if (podH) add(model, new T.BoxGeometry(L * .12, podH, rf * 1.1), M(C.frame, {r: .45}), xLE - cr * .3, y0 - rf - podH / 2 + 2, 0);
     ext = Math.max(b / 2, L / 2); cy = y0;
-    cap = `Fixed-wing · ${fmt(b, 0)} mm span · aspect ratio ${fmt(AR, 1)} · ${fmt(p.D_in, 1)} in prop`;
+    cap = `${cur.frame === 'vtail' ? 'V-tail' : 'Conventional'} fixed-wing · ${fmt(b, 0)} mm span · aspect ratio ${fmt(AR, 1)} · ${fmt(p.D_in, 1)} in prop`;
   }
 
   const step = [10, 20, 25, 50, 100, 200, 250, 500, 1000].find(s => ext * 2.4 / s <= 14) || 1000;
@@ -2387,6 +2618,7 @@ work.addEventListener('click', e => {
   const menu = b.closest('details.menu'); if (menu) menu.open = false;
   if (b.dataset.open) return openSaved(b.dataset.open);
   if (b.dataset.preset) return openPreset(b.dataset.preset);
+  if (b.dataset.useframe) return useFrame(b.dataset.fk, b.dataset.useframe);
   if (b.dataset.libtag) { LIB.tag = b.dataset.libtag; return renderLibrary(); }
   if (b.dataset.sweep) {
     S.sweep.param = b.dataset.sweep; S.sweep.key = null;
@@ -2477,6 +2709,7 @@ infoP.then(() => browserSaved() ? {ok: true, items: lsSaved()} : fetch('/api/sav
 
 renderAside();
 if (location.hash.includes('library')) { S.view = 'library'; renderWork(); }
+else if (location.hash.includes('frames')) { S.view = 'frames'; renderWork(); }
 else if (!wantCompare) run();
 </script>
 </body>

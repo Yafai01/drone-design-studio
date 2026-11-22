@@ -16,6 +16,7 @@ Designed and developed by **Yafai**.
 - **Trade study:** vary one part across a range and chart flight time and thrust-to-weight.
 - **Conditions:** altitude, air temperature and landing battery reserve feed the physics.
 - **Pre-built designs:** 10 example builds from 5-inch FPV to a 3 m endurance wing.
+- **Frame layouts:** Quad X / + / H / Deadcat, Hex X / + / Y6 coaxial, Octo X / + / X8 coaxial, and Conventional / V-tail / Flying wing airframes. The layout changes the drawing, 3D model and parts list; flight numbers come from motor count, props, battery and payload. Browse them all with `#frames`.
 - **Saved builds and comparison**, **PDF design report**, **parts list CSV** and keyboard shortcuts (press `?`).
 
 ## Run it locally
